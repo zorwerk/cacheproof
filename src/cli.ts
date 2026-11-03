@@ -225,7 +225,8 @@ function comparePair(fileA: string, payloadA: Json, fileB: string, payloadB: Jso
 
 function explainRules(): string {
   const { RULE_IDS, RULE_DESCRIPTIONS } = require("./classify") as typeof import("./classify");
-  const lines = ["cacheproof 0.1.0 — rule ids", ""];
+  // Interpolate the constant: a standalone version literal in this banner drifted once already (F1).
+  const lines = [`cacheproof ${VERSION} — rule ids`, ""];
   for (const id of RULE_IDS) {
     lines.push(`  ${id}`);
     lines.push(`      ${RULE_DESCRIPTIONS[id]}`);

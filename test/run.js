@@ -487,6 +487,18 @@ if (diffParsed) {
 const version = run(["--version"]);
 check("--version prints 0.1.1", version.stdout.trim() === "0.1.1", version.stdout.trim());
 
+// F1: the `rules` banner was a hardcoded version literal in a second output surface, so it still said
+// 0.1.0 after the bump while `--version`, the header and the JSON said 0.1.1. Assert the built
+// surface, and assert it agrees with this same binary's `--version`, so the two can never drift apart
+// while both being "correct".
+const rulesBanner = run(["rules"]).stdout.split("\n")[0];
+check(
+  "rules banner prints 0.1.1",
+  /^cacheproof 0\.1\.1 — rule ids$/.test(rulesBanner) &&
+    rulesBanner === `cacheproof ${version.stdout.trim()} — rule ids`,
+  `banner: ${JSON.stringify(rulesBanner)}`,
+);
+
 // ----------------------------------------------------------------------------
 fs.rmSync(tmp, { recursive: true, force: true });
 
