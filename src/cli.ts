@@ -15,7 +15,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { Json, byteSlice, estimateTokens, firstDivergence } from "./canonical";
 import { Change, diffJson } from "./diff";
-import { classify } from "./classify";
+import { RULE_DESCRIPTIONS, RULE_IDS, classify } from "./classify";
 import {
   Provider,
   PROVIDERS,
@@ -224,9 +224,10 @@ function comparePair(fileA: string, payloadA: Json, fileB: string, payloadB: Jso
 }
 
 function explainRules(): string {
-  const { RULE_IDS, RULE_DESCRIPTIONS } = require("./classify") as typeof import("./classify");
   // Interpolate the constant: a standalone version literal in this banner drifted once already (F1).
   const lines = [`cacheproof ${VERSION} — rule ids`, ""];
+  // RULE_IDS is the single source of truth: the help line and this listing are
+  // both derived from its length, so a seventh rule cannot leave stale prose (F3).
   for (const id of RULE_IDS) {
     lines.push(`  ${id}`);
     lines.push(`      ${RULE_DESCRIPTIONS[id]}`);
@@ -243,7 +244,7 @@ Usage
   cacheproof check <run.jsonl> [options]         compare consecutive requests in a run
   cacheproof diff  <a.json> <b.json> [options]   offset + structural changes, no gate
   cacheproof price --tokens-prefix N --tokens-total M [options]
-  cacheproof rules                               list the five rule ids
+  cacheproof rules                               list all ${RULE_IDS.length} rule ids
 
 Options
   --provider anthropic|openai|deepseek   default anthropic
@@ -432,7 +433,26 @@ function main(argv: string[]): number {
   }
 }
 
+/**
+ * A reader that closes the pipe early (`| head -1`, `| true`, `grep -q`, or a CI
+ * step whose consumer dies) makes the next write raise EPIPE. That is the
+ * consumer's choice, not a failure of this run: exit 0 with nothing on stderr
+ * instead of a stack trace. Anything that is NOT EPIPE is rethrown, never
+ * swallowed — a real stream fault must still be visible (F2).
+ */
+function guardStreams(): void {
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on("error", (error: NodeJS.ErrnoException) => {
+      if (error && error.code === "EPIPE") {
+        process.exit(0);
+      }
+      throw error;
+    });
+  }
+}
+
 if (require.main === module) {
+  guardStreams();
   process.exitCode = main(process.argv.slice(2));
 }
 

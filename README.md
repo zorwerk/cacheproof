@@ -7,7 +7,7 @@ turns a 0.1× cache read into a 1.25× cache write — with **no error, no warni
 The only trace is a counter that reads `0`.
 
 `cacheproof` is a linter for that failure. It takes two captured requests, finds the first byte that
-diverged, names the cause among five rules, and prices what the miss costs you per call and per month.
+diverged, names the cause among six rules, and prices what the miss costs you per call and per month.
 
 Offline. Zero runtime dependencies. No API key, no network, no telemetry, no proxy.
 
@@ -81,7 +81,7 @@ cacheproof check a.json b.json                       # gate: exit 1 on a broken 
 cacheproof check run.jsonl                           # compare consecutive requests in one run
 cacheproof diff  a.json b.json                       # offset + changed paths, no gate
 cacheproof price --tokens-prefix 640 --tokens-total 695
-cacheproof rules                                     # the five rule ids
+cacheproof rules                                     # the six rule ids
 ```
 
 Options: `--provider anthropic|openai|deepseek` · `--model <name>` · `--rates <file>` ·

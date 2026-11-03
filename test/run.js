@@ -18,6 +18,8 @@ const path = require("path");
 const ROOT = path.resolve(__dirname, "..");
 const CLI = path.join(ROOT, "dist", "cli.js");
 const FIXTURES = path.join(ROOT, "test", "fixtures");
+// The built rule list, so every count in the suite (and in the prose it grades) derives from one array.
+const { RULE_IDS } = require(path.join(ROOT, "dist", "classify.js"));
 
 let pass = 0;
 const failures = [];
@@ -466,7 +468,11 @@ check("human output prints the pricing date", /Pricing: Nov 2026/.test(text.stdo
 check("human output states the token estimate is an estimate", /estimated/.test(text.stdout));
 
 const rulesOut = run(["rules"]);
-check("rules command lists five ids plus the fallback", (rulesOut.stdout.match(/^ {2}[a-z-]+$/gm) || []).length === 6);
+check(
+  "rules command lists exactly RULE_IDS plus the fallback",
+  (rulesOut.stdout.match(/^ {2}[a-z-]+$/gm) || []).length === RULE_IDS.length,
+  `got ${(rulesOut.stdout.match(/^ {2}[a-z-]+$/gm) || []).length}, RULE_IDS has ${RULE_IDS.length}`,
+);
 
 // `--json` is documented as global, so `diff` must honour it (audit D2).
 const diffText = run(["diff", path.join(hostile, "a.json"), path.join(hostile, "b.json")]);
@@ -497,6 +503,71 @@ check(
   /^cacheproof 0\.1\.1 — rule ids$/.test(rulesBanner) &&
     rulesBanner === `cacheproof ${version.stdout.trim()} — rule ids`,
   `banner: ${JSON.stringify(rulesBanner)}`,
+);
+
+const RULES_NUMERALS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+
+check(
+  "help derives its rule count from RULE_IDS",
+  run(["--help"]).stdout.includes(`list all ${RULE_IDS.length} rule ids`),
+  `RULE_IDS.length=${RULE_IDS.length}`,
+);
+check(
+  "rules listing matches RULE_IDS exactly",
+  run(["rules"])
+    .stdout.match(/^ {2}[a-z-]+$/gm)
+    .map((line) => line.trim())
+    .join(",") === RULE_IDS.join(","),
+  `listed ${run(["rules"]).stdout.match(/^ {2}[a-z-]+$/gm).length}, RULE_IDS ${RULE_IDS.length}`,
+);
+
+// The numeral in prose is a second surface of the same fact (the F1/F3 class): a spelled count
+// that disagrees with RULE_IDS.length must fail here rather than ship. Both surfaces that carry
+// prose — --help and README.md — are graded against the array itself.
+const proseSurfaces = [
+  { name: "--help", text: run(["--help"]).stdout },
+  { name: "README.md", text: fs.readFileSync(path.join(ROOT, "README.md"), "utf8") },
+];
+for (const surface of proseSurfaces) {
+  const claims = surface.text.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:rule ids|rules)\b/gi) || [];
+  for (const claim of claims) {
+    const word = claim.match(/^[a-z]+/i)[0].toLowerCase();
+    check(
+      `${surface.name} rule-count word "${word}" equals RULE_IDS.length (${RULE_IDS.length})`,
+      RULES_NUMERALS[word] === RULE_IDS.length,
+      `claimed ${RULES_NUMERALS[word]}, actual ${RULE_IDS.length}`,
+    );
+  }
+}
+check(
+  "README.md states the real rule count at least once",
+  proseSurfaces[1].text.search(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:rule ids|rules)\b/i) >= 0,
+);
+
+// F2: a consumer that closes the pipe first (`| true`, `head -n 0`, `grep -q`) used to kill the run
+// with an unhandled EPIPE stack trace. Destroy the child's stdout immediately and assert a clean 0.
+const epipeProbe = `
+const { spawn } = require("child_process");
+const child = spawn(process.execPath, [process.env.CP_CLI, "rules"], { stdio: ["ignore", "pipe", "pipe"] });
+let err = "";
+child.stderr.on("data", (chunk) => { err += chunk; });
+child.stdout.destroy();
+child.on("close", (code) => { process.stdout.write(JSON.stringify({ code: code, err: err })); });
+`;
+const epipeOut = execFileSync(process.execPath, ["-e", epipeProbe], {
+  encoding: "utf8",
+  env: { ...process.env, CP_CLI: CLI },
+});
+const epipe = JSON.parse(epipeOut);
+check(
+  "a prematurely closed stdout exits 0",
+  epipe.code === 0,
+  `rc ${epipe.code} · stderr ${JSON.stringify(String(epipe.err).slice(0, 200))}`,
+);
+check(
+  "a prematurely closed stdout writes nothing to stderr",
+  String(epipe.err) === "",
+  JSON.stringify(String(epipe.err).slice(0, 200)),
 );
 
 // ----------------------------------------------------------------------------
