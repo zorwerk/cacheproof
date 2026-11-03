@@ -1,16 +1,16 @@
 # Instrument pins — cacheproof v0.1.0
-# re-pinned 2026-11-03T21:46:21Z after the audit D1–D3 fix
+# re-pinned 2026-11-03T21:49:58Z after the audit D1–D3 fix
 # supersedes the 2026-11-03T21:37:11Z pin (pre-fix, 13 fixtures, 94 checks)
 # sha256 · file
 
 a3316c09b22c1a4d188276f479bf904f32a0435c4d5cff7c104d2e67f4193dc8  src/canonical.ts
-1af210e92eb6a0398b9734f97bbc9e5482ad1dbfb68b60a92bbedd3506aed830  src/classify.ts
+e918317dba63325cdf67a2422b2d65eb587b60047a4dd7fd5735d71040aeab02  src/classify.ts
 6e040867f4f9be50e4bea450e4d7c8873a8a3faf08ab041e5b50f4805ba9925f  src/cli.ts
 c17e573e11c26fbf63b5eb0193d9eb357914c23fec5ffcb79024a78cce3e652a  src/diff.ts
 21590f6e60cee0a4301b8c51f6b615b26aad0f8b8cef9198c1c4c03ea4d09e47  src/ingest.ts
 999fcfe2f0f9e8ffeb75467b4dede8a02e8905677e7ac61815755430b03eaa26  src/price.ts
 7ac1446c8b8582a46e6a3303bb75e88c0386b9290f55812c035bfd3a9fc175a8  src/report.ts
-ab7b821f50a4111aa4fa142e19f60d6db3e9edaf08400105b78a468a4859d31b  test/run.js
+d5a7430f26ed3b3a165ff0774ea3fd326d8bd159f455ebe4547a457ddc655e12  test/run.js
 b33ac3818ee5d4337f0ff04b620d78378dc1e3b7dde0c0cd3dfe5161fa992634  test/fixtures/derive_offsets.py
 94141b3671a1f75653a6f1823d28d6945b0941ec0dc0dbcfa0a5b6667422733b  test/fixtures/make_fixtures.py
 e4eb4664983787153136d66c641a11db849d24746c397862f3d968816f069c91  rates/rates.json

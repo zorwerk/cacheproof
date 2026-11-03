@@ -292,6 +292,33 @@ const bomFixture = run([
 ]);
 check("a valid BOM'd request pair is graded, not rejected", bomFixture.code === 0, `got ${bomFixture.code}`);
 
+// The retrieval-insert evidence string once printed a code-unit count while calling it "canonical
+// bytes" — the same defect as D1, one layer deeper. A CJK block makes the two units differ 3:1, so
+// the number in the message is checkable against the canonicalisation the tool itself performs.
+const r3a = JSON.parse(fs.readFileSync(path.join(FIXTURES, "r3-retrieval-insert__hostile", "a.json"), "utf8"));
+const r3b = JSON.parse(fs.readFileSync(path.join(FIXTURES, "r3-retrieval-insert__hostile", "b.json"), "utf8"));
+const insertedBlock = r3b.system[0];
+insertedBlock.text = `RETRIEVED CONTEXT\n${"檢".repeat(100)}`;
+const cjkA = path.join(tmp, "cjk_r3_a.json");
+const cjkB = path.join(tmp, "cjk_r3_b.json");
+fs.writeFileSync(cjkA, JSON.stringify(r3a), "utf8");
+fs.writeFileSync(cjkB, JSON.stringify(r3b), "utf8");
+const cjkResult = runJson(["check", cjkA, cjkB]);
+const cjkEvidence = cjkResult.json && cjkResult.json.classification
+  ? String(cjkResult.json.classification.evidence[0])
+  : "";
+const cjkBytes = stableStringify(insertedBlock).bytes.length;
+check(
+  "retrieval-insert evidence counts canonical bytes, not code units",
+  cjkEvidence.includes(`(${cjkBytes} canonical bytes`),
+  `expected ${cjkBytes} B in: ${cjkEvidence.slice(0, 120)}`,
+);
+check(
+  "that evidence number is genuinely larger than a code-unit count",
+  cjkBytes > insertedBlock.text.length,
+  `bytes ${cjkBytes} · units ${insertedBlock.text.length}`,
+);
+
 // JSONL run: three stacked payloads, the middle one carrying a broken prefix.
 const cleanDir = path.join(FIXTURES, "r2-tool-order__clean");
 const runFile = path.join(tmp, "run.jsonl");

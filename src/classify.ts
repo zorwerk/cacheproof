@@ -80,7 +80,14 @@ function textOf(value: Json | undefined): string {
 
 function blockTextLength(value: Json | undefined): number {
   if (value === undefined) return 0;
-  return stableStringify(value).text.length;
+  // Canonical BYTES, not string length: audit D1 also lived in this evidence string, which told the
+  // reader "N canonical bytes" while printing a UTF-16 code-unit count.
+  return stableStringify(value).bytes.length;
+}
+
+// Characters as a reader counts them (code points), not UTF-16 code units — an emoji is one character.
+function characterCount(value: string): number {
+  return [...value].length;
 }
 
 function isRetrievalShaped(value: Json | undefined): boolean {
@@ -177,15 +184,17 @@ export function classify(a: Ingested, b: Ingested, changes: Change[]): Classific
     if (typeof change.before !== "string" || typeof change.after !== "string") continue;
     const before = change.before;
     const after = change.after;
+    const beforeChars = characterCount(before);
+    const afterChars = characterCount(after);
     if (before.length > 0 && after.endsWith(before) && after.length > before.length) {
       evidence.push(
-        `text at ${change.path} gained ${after.length - before.length} characters at the FRONT ` +
+        `text at ${change.path} gained ${afterChars - beforeChars} characters at the FRONT ` +
           `(the stable block is still a suffix of it)`,
       );
       return { rule: "instruction-prefix", confidence: "high", evidence, inCachedRegion, cachedChanges, allChanges: changes };
     }
     if (before.endsWith(after) && before.length > after.length) {
-      evidence.push(`text at ${change.path} lost ${before.length - after.length} characters from the FRONT`);
+      evidence.push(`text at ${change.path} lost ${beforeChars - afterChars} characters from the FRONT`);
       return { rule: "instruction-prefix", confidence: "medium", evidence, inCachedRegion, cachedChanges, allChanges: changes };
     }
   }
