@@ -1,0 +1,71 @@
+{
+  "as_of": "2026-11",
+  "display": "Pricing: Nov 2026 — Anthropic / OpenAI / DeepSeek public rates",
+  "provenance": "Transcribed from the ratified Zorwerk demand dossier §4.1 (2026-11-03) and the vendors' published pricing pages. Rates change; this file is data, not code, so override it with --rates <file> and keep your own date.",
+  "sources": {
+    "anthropic": "https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching",
+    "openai": "https://openai.com/api/pricing/",
+    "deepseek": "https://api-docs.deepseek.com/quick_start/pricing"
+  },
+  "units": "USD per 1,000,000 tokens",
+  "providers": {
+    "anthropic": {
+      "default_model": "claude-3-5-sonnet",
+      "cache_mode": "explicit",
+      "note": "Explicit cache_control breakpoints. A miss bills the whole request at the write rate (1.25x input, 5-minute TTL); a hit bills the cached prefix at 0.1x and the tail at input rate.",
+      "models": {
+        "claude-3-5-sonnet": {
+          "input_per_mtok": 3.0,
+          "cache_write_per_mtok": 3.75,
+          "cache_write_multiplier": 1.25,
+          "cache_read_per_mtok": 0.3,
+          "cache_read_multiplier": 0.1
+        },
+        "claude-3-5-haiku": {
+          "input_per_mtok": 0.8,
+          "cache_write_per_mtok": 1.0,
+          "cache_write_multiplier": 1.25,
+          "cache_read_per_mtok": 0.08,
+          "cache_read_multiplier": 0.1
+        }
+      }
+    },
+    "openai": {
+      "default_model": "gpt-4o",
+      "cache_mode": "implicit",
+      "implicit_prefix_min_tokens": 1024,
+      "note": "Automatic prefix caching over the longest previously-computed prefix (>= 1024 tokens, 128-token increments). No write fee; a hit bills the cached prefix at the cached-input rate.",
+      "models": {
+        "gpt-4o": {
+          "input_per_mtok": 2.5,
+          "cache_write_per_mtok": 0,
+          "cache_write_multiplier": 0,
+          "cache_read_per_mtok": 1.25,
+          "cache_read_multiplier": 0.5
+        }
+      }
+    },
+    "deepseek": {
+      "default_model": "deepseek-v2.5",
+      "cache_mode": "implicit",
+      "implicit_prefix_min_tokens": 0,
+      "note": "On-disk context cache, on by default, exact prefix match. A hit bills the cached prefix at the cache-hit rate; no write fee.",
+      "models": {
+        "deepseek-v2.5": {
+          "input_per_mtok": 0.14,
+          "cache_write_per_mtok": 0,
+          "cache_write_multiplier": 0,
+          "cache_read_per_mtok": 0.014,
+          "cache_read_multiplier": 0.1
+        },
+        "deepseek-v3": {
+          "input_per_mtok": 0.27,
+          "cache_write_per_mtok": 0,
+          "cache_write_multiplier": 0,
+          "cache_read_per_mtok": 0.07,
+          "cache_read_multiplier": 0.259259
+        }
+      }
+    }
+  }
+}

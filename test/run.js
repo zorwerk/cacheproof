@@ -1,0 +1,294 @@
+#!/usr/bin/env node
+/**
+ * Zero-dependency test runner.
+ *
+ * The rule this file enforces: every rule is proven twice — a hostile fixture that
+ * must fire and a clean fixture that must stay quiet — and the byte offset is
+ * proven against an implementation that is not the one under test
+ * (test/fixtures/derive_offsets.py, Python, its own canonicaliser).
+ *
+ * Run: npm test    (after npm run build)
+ */
+
+const { execFileSync } = require("child_process");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+const ROOT = path.resolve(__dirname, "..");
+const CLI = path.join(ROOT, "dist", "cli.js");
+const FIXTURES = path.join(ROOT, "test", "fixtures");
+
+let pass = 0;
+const failures = [];
+let group = "";
+
+function section(name) {
+  group = name;
+}
+
+function check(name, condition, detail) {
+  if (condition) {
+    pass += 1;
+    return;
+  }
+  failures.push(`${group} :: ${name}${detail ? ` — ${detail}` : ""}`);
+}
+
+function run(args) {
+  try {
+    const stdout = execFileSync(process.execPath, [CLI, ...args], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return { code: 0, stdout, stderr: "" };
+  } catch (error) {
+    return {
+      code: typeof error.status === "number" ? error.status : -1,
+      stdout: error.stdout ? String(error.stdout) : "",
+      stderr: error.stderr ? String(error.stderr) : "",
+    };
+  }
+}
+
+function runJson(args) {
+  const result = run([...args, "--json"]);
+  let parsed = null;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    parsed = null;
+  }
+  return { ...result, json: parsed };
+}
+
+function near(actual, expected, tolerance) {
+  return Number.isFinite(actual) && Math.abs(actual - expected) <= tolerance;
+}
+
+// ---------------------------------------------------------------- fixtures
+section("fixtures");
+const cases = fs
+  .readdirSync(FIXTURES, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .sort();
+
+check("fixture count is 13", cases.length === 13, `found ${cases.length}`);
+
+for (const name of cases) {
+  const dir = path.join(FIXTURES, name);
+  const expected = JSON.parse(fs.readFileSync(path.join(dir, "expected.json"), "utf8"));
+  const result = runJson([
+    "check",
+    path.join(dir, "a.json"),
+    path.join(dir, "b.json"),
+  ]);
+
+  check(`${name}: exit ${expected.exit}`, result.code === expected.exit, `got ${result.code} ${result.stderr.trim()}`);
+
+  if (expected.exit === 2) {
+    check(`${name}: reported a reason on stderr`, result.stderr.trim().length > 0, "no stderr");
+    continue;
+  }
+
+  check(`${name}: machine-readable output`, result.json !== null, "stdout was not JSON");
+  if (!result.json) continue;
+
+  const rule = result.json.classification ? result.json.classification.rule : undefined;
+  check(`${name}: rule ${String(expected.rule)}`, rule === expected.rule, `got ${String(rule)}`);
+
+  // Cross-implementation agreement on the offset: expected.offset was produced by
+  // derive_offsets.py, not by the TypeScript canonicaliser under test.
+  check(
+    `${name}: offset matches the independent Python derivation (${String(expected.offset)})`,
+    result.json.offset === expected.offset,
+    `got ${String(result.json.offset)}`,
+  );
+  check(
+    `${name}: canonical byte count A (${expected.canonical_bytes_a})`,
+    result.json.requests.a.canonical_bytes === expected.canonical_bytes_a,
+    `got ${result.json.requests.a.canonical_bytes}`,
+  );
+  check(
+    `${name}: canonical byte count B (${expected.canonical_bytes_b})`,
+    result.json.requests.b.canonical_bytes === expected.canonical_bytes_b,
+    `got ${result.json.requests.b.canonical_bytes}`,
+  );
+}
+
+// ------------------------------------------------------------- price arithmetic
+section("price");
+// The published example from the demand dossier §4.2: a 640-token stable prefix
+// inside a 695-token request, Anthropic rates.
+const dossier = runJson([
+  "price",
+  "--provider",
+  "anthropic",
+  "--model",
+  "claude-3-5-sonnet",
+  "--tokens-prefix",
+  "640",
+  "--tokens-total",
+  "695",
+]);
+check("dossier example exits 0", dossier.code === 0, dossier.stderr.trim());
+if (dossier.json) {
+  check("miss cost $0.00261", near(dossier.json.missCost, 0.00261, 1e-5), `got ${dossier.json.missCost}`);
+  check("hit cost $0.00036", near(dossier.json.hitCost, 0.00036, 1e-5), `got ${dossier.json.hitCost}`);
+  check("miss multiple 7.30x", near(dossier.json.multiple, 7.3, 0.01), `got ${dossier.json.multiple}`);
+  check("tail is 55 tokens", dossier.json.tailTokens === 55, `got ${dossier.json.tailTokens}`);
+}
+
+const implicit = runJson([
+  "price",
+  "--provider",
+  "deepseek",
+  "--model",
+  "deepseek-v2.5",
+  "--tokens-prefix",
+  "640",
+  "--tokens-total",
+  "695",
+]);
+if (implicit.json) {
+  // Rates are per million tokens: 640 * 0.014/1e6 + 55 * 0.14/1e6 = 0.00001666
+  // (0.00000896 + 0.0000077). A miss is 695 * 0.14/1e6 = 0.0000973.
+  check("deepseek hit cost 0.00001666", near(implicit.json.hitCost, 0.00001666, 1e-9), `got ${implicit.json.hitCost}`);
+  check("deepseek miss cost 0.0000973", near(implicit.json.missCost, 0.0000973, 1e-9), `got ${implicit.json.missCost}`);
+  check("deepseek multiple 5.84x", near(implicit.json.multiple, 5.8403, 0.01), `got ${implicit.json.multiple}`);
+}
+
+// -------------------------------------------------------------- gate boundary
+section("gate");
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cacheproof-"));
+
+// A table where a hit costs exactly what a miss costs: the boundary must PASS.
+const flatRates = path.join(tmp, "flat-rates.json");
+fs.writeFileSync(
+  flatRates,
+  JSON.stringify({
+    as_of: "test",
+    providers: {
+      anthropic: {
+        default_model: "flat",
+        cache_mode: "explicit",
+        models: {
+          flat: { input_per_mtok: 3, cache_write_per_mtok: 3, cache_read_per_mtok: 3 },
+        },
+      },
+    },
+  }),
+);
+
+const flat = runJson([
+  "price",
+  "--rates",
+  flatRates,
+  "--model",
+  "flat",
+  "--tokens-prefix",
+  "640",
+  "--tokens-total",
+  "695",
+]);
+if (flat.json) {
+  check("equal cost gives exactly 1.00x", near(flat.json.multiple, 1.0, 1e-9), `got ${flat.json.multiple}`);
+}
+
+const hostile = path.join(FIXTURES, "r1-volatile-above-breakpoint__hostile");
+const boundaryPass = run([
+  "check",
+  path.join(hostile, "a.json"),
+  path.join(hostile, "b.json"),
+  "--rates",
+  flatRates,
+  "--model",
+  "flat",
+  "--max-miss-multiple",
+  "1.0",
+]);
+check("multiple exactly 1.0 passes the 1.0 gate", boundaryPass.code === 0, `got ${boundaryPass.code}`);
+
+const strict = run([
+  "check",
+  path.join(hostile, "a.json"),
+  path.join(hostile, "b.json"),
+  "--max-miss-multiple",
+  "0.5",
+]);
+check("a threshold below 1 is rejected as unusable input", strict.code === 2, `got ${strict.code}`);
+
+// This fixture's measured multiple is ~4.33x, so 10.0 is loose enough to pass it.
+const brokenGate = run([
+  "check",
+  path.join(hostile, "a.json"),
+  path.join(hostile, "b.json"),
+  "--max-miss-multiple",
+  "10.0",
+]);
+check("a real miss below a loose threshold passes but stays reported", brokenGate.code === 0, `got ${brokenGate.code}`);
+check(
+  "the loose-threshold pass still prints BROKEN PREFIX",
+  /BROKEN PREFIX/.test(brokenGate.stdout),
+  brokenGate.stdout.slice(0, 120),
+);
+
+// ------------------------------------------------------------- input handling
+section("input");
+const missing = run(["check", path.join(tmp, "nope.json"), path.join(tmp, "nope2.json")]);
+check("missing file is cannot-decide (2)", missing.code === 2, `got ${missing.code}`);
+
+const unknownProvider = run([
+  "check",
+  path.join(hostile, "a.json"),
+  path.join(hostile, "b.json"),
+  "--provider",
+  "acme",
+]);
+check("unknown provider is cannot-decide (2)", unknownProvider.code === 2, `got ${unknownProvider.code}`);
+
+// JSONL run: three stacked payloads, the middle one carrying a broken prefix.
+const cleanDir = path.join(FIXTURES, "r2-tool-order__clean");
+const runFile = path.join(tmp, "run.jsonl");
+const p1 = fs.readFileSync(path.join(cleanDir, "a.json"), "utf8").trim();
+const p2 = fs.readFileSync(path.join(cleanDir, "b.json"), "utf8").trim();
+const p3 = fs.readFileSync(path.join(hostile, "a.json"), "utf8").trim();
+const p4 = fs.readFileSync(path.join(hostile, "b.json"), "utf8").trim();
+fs.writeFileSync(runFile, [p1, p2, p3, p4].map((line) => line.replace(/\n/g, " ")).join("\n"));
+
+const jsonlClean = run(["check", runFile]);
+check(
+  "a JSONL run with a broken pair somewhere exits 1 (worst pair wins)",
+  jsonlClean.code === 1,
+  `got ${jsonlClean.code}`,
+);
+
+const jsonlSingle = path.join(tmp, "single.json");
+fs.writeFileSync(jsonlSingle, p1);
+const single = run(["check", jsonlSingle]);
+check("one file with one payload cannot decide (2)", single.code === 2, `got ${single.code}`);
+
+// ------------------------------------------------------------ output contract
+section("output");
+const text = run(["check", path.join(hostile, "a.json"), path.join(hostile, "b.json")]);
+check("human output names the first divergence byte", /first divergence: byte \d+/.test(text.stdout));
+check("human output names the rule", /rule volatile-above-breakpoint/.test(text.stdout));
+check("human output prints the pricing date", /Pricing: Nov 2026/.test(text.stdout));
+check("human output states the token estimate is an estimate", /estimated/.test(text.stdout));
+
+const rulesOut = run(["rules"]);
+check("rules command lists five ids plus the fallback", (rulesOut.stdout.match(/^ {2}[a-z-]+$/gm) || []).length === 6);
+
+const version = run(["--version"]);
+check("--version prints 0.1.0", version.stdout.trim() === "0.1.0", version.stdout.trim());
+
+// ----------------------------------------------------------------------------
+fs.rmSync(tmp, { recursive: true, force: true });
+
+const total = pass + failures.length;
+console.log(`\ncacheproof ${total} checks — ${pass} passed, ${failures.length} failed\n`);
+if (failures.length > 0) {
+  for (const failure of failures) console.log(`  FAIL ${failure}`);
+  process.exitCode = 1;
+}
