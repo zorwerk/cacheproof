@@ -1,0 +1,9 @@
+{
+  "canonical_bytes_a": 842,
+  "canonical_bytes_b": 842,
+  "exit": 2,
+  "offset": null,
+  "rule": null,
+  "shared_bytes": 842,
+  "why": "provider anthropic needs an explicit cache_control breakpoint; none declared"
+}

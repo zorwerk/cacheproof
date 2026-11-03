@@ -1,0 +1,11 @@
+{
+  "canonical_bytes_a": 879,
+  "canonical_bytes_b": 935,
+  "exit": 0,
+  "expected_byte_a": "W",
+  "expected_byte_b": "F",
+  "offset": 52,
+  "rule": null,
+  "shared_bytes": 52,
+  "why": "the per-call instruction rides below the breakpoint"
+}

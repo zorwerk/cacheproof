@@ -1,0 +1,11 @@
+{
+  "canonical_bytes_a": 916,
+  "canonical_bytes_b": 916,
+  "exit": 1,
+  "expected_byte_a": "0",
+  "expected_byte_b": "3",
+  "offset": 255,
+  "rule": "volatile-above-breakpoint",
+  "shared_bytes": 255,
+  "why": "only the ISO-8601 timestamp inside the cached system block differs"
+}

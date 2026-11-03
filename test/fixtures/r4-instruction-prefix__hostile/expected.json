@@ -1,0 +1,11 @@
+{
+  "canonical_bytes_a": 879,
+  "canonical_bytes_b": 911,
+  "exit": 1,
+  "expected_byte_a": "H",
+  "expected_byte_b": "F",
+  "offset": 223,
+  "rule": "instruction-prefix",
+  "shared_bytes": 223,
+  "why": "a per-call instruction block is concatenated in FRONT of the stable rules"
+}

@@ -1,0 +1,11 @@
+{
+  "canonical_bytes_a": 879,
+  "canonical_bytes_b": 1176,
+  "exit": 1,
+  "expected_byte_a": "c",
+  "expected_byte_b": "t",
+  "offset": 179,
+  "rule": "retrieval-insert",
+  "shared_bytes": 179,
+  "why": "a retrieved-context block is injected above the breakpoint"
+}

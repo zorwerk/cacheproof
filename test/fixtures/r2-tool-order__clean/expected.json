@@ -1,0 +1,11 @@
+{
+  "canonical_bytes_a": 879,
+  "canonical_bytes_b": 879,
+  "exit": 0,
+  "expected_byte_a": "2",
+  "expected_byte_b": "3",
+  "offset": 82,
+  "rule": null,
+  "shared_bytes": 82,
+  "why": "tools untouched; only the trailing question changed"
+}

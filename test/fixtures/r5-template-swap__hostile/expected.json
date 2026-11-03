@@ -1,0 +1,11 @@
+{
+  "canonical_bytes_a": 879,
+  "canonical_bytes_b": 879,
+  "exit": 1,
+  "expected_byte_a": "5",
+  "expected_byte_b": "7",
+  "offset": 148,
+  "rule": "template-swap",
+  "shared_bytes": 148,
+  "why": "model change re-tokenises the cached region"
+}

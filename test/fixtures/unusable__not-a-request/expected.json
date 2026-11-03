@@ -1,0 +1,11 @@
+{
+  "canonical_bytes_a": 879,
+  "canonical_bytes_b": 32,
+  "exit": 2,
+  "expected_byte_a": "m",
+  "expected_byte_b": "n",
+  "offset": 2,
+  "rule": null,
+  "shared_bytes": 2,
+  "why": "no model/system/messages shape: not comparable"
+}

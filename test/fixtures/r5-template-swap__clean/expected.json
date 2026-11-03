@@ -1,0 +1,11 @@
+{
+  "canonical_bytes_a": 879,
+  "canonical_bytes_b": 879,
+  "exit": 0,
+  "expected_byte_a": "1",
+  "expected_byte_b": "2",
+  "offset": 14,
+  "rule": null,
+  "shared_bytes": 14,
+  "why": "max_tokens rides after the cached region; nothing cacheable moved"
+}

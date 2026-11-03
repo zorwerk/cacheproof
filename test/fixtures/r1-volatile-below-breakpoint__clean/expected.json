@@ -1,0 +1,11 @@
+{
+  "canonical_bytes_a": 894,
+  "canonical_bytes_b": 894,
+  "exit": 0,
+  "expected_byte_a": "0",
+  "expected_byte_b": "3",
+  "offset": 107,
+  "rule": null,
+  "shared_bytes": 107,
+  "why": "volatile value is below the cache breakpoint; the cached prefix is intact"
+}

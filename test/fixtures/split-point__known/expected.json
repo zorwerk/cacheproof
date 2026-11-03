@@ -1,0 +1,12 @@
+{
+  "canonical_bytes_a": 901,
+  "canonical_bytes_b": 901,
+  "exit": 1,
+  "expected_byte_a": "S",
+  "expected_byte_b": "M",
+  "offset": 524,
+  "offset_derived_by": "derive_offsets.py (independent of the ts canonicaliser)",
+  "rule": "unclassified-cached-change",
+  "shared_bytes": 524,
+  "why": "single in-prefix edit that matches no named volatile pattern"
+}
