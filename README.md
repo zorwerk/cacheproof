@@ -38,11 +38,27 @@ gate: --max-miss-multiple 1.00 → exit 1
 
 ## Install
 
+v0.1.0 is not on npm yet. Install from source — three commands, each offline after the clone:
+
 ```bash
-npx cacheproof check a.json b.json     # nothing to install, no build step for the user
+git clone https://github.com/Naveen-Parashar/cacheproof.git
+cd cacheproof && npm install && npm run build
+npm link                       # puts `cacheproof` on your PATH
+
+# or, without linking:
+node dist/cli.js check a.json b.json
 ```
 
+npm distribution is enabled at v0.1.0 publication; until then `npx cacheproof` will not resolve.
 Nothing is sent anywhere. The tool reads two local files and prints.
+
+## Install (from npm, after release)
+
+Not available yet — publishing is gated on the v0.1.0 certification. When it lands:
+
+```bash
+npx cacheproof check a.json b.json
+```
 
 ## What it checks
 
@@ -73,10 +89,18 @@ Options: `--provider anthropic|openai|deepseek` · `--model <name>` · `--rates 
 
 ### In CI
 
+Until the npm release, build it once in the job from a pinned commit:
+
 ```yaml
+- name: build cacheproof
+  run: |
+    git clone https://github.com/Naveen-Parashar/cacheproof.git tools/cacheproof
+    cd tools/cacheproof && git checkout v0.1.0 && npm ci && npm run build
+
 - name: prompt cache did not regress
   run: |
-    npx cacheproof check captured/prev.json captured/curr.json --max-miss-multiple 1.0
+    node tools/cacheproof/dist/cli.js check captured/prev.json captured/curr.json \
+      --max-miss-multiple 1.0
 ```
 
 ### Exit codes

@@ -1,6 +1,7 @@
 # Instrument pins — cacheproof v0.1.0
-# re-pinned 2026-11-03T21:49:58Z after the audit D1–D3 fix
-# supersedes the 2026-11-03T21:37:11Z pin (pre-fix, 13 fixtures, 94 checks)
+# re-pinned 2026-11-03T21:58:23Z — README row after the COO-ruled clone-and-build quickstart
+# supersedes the 2026-11-03T21:37:11Z pin (pre-fix) and the D1-D3 pin; README row
+#   re-hashed for the COO-ruled clone-and-build quickstart (4a8042a -> README commit)
 # sha256 · file
 
 a3316c09b22c1a4d188276f479bf904f32a0435c4d5cff7c104d2e67f4193dc8  src/canonical.ts
@@ -17,4 +18,4 @@ e4eb4664983787153136d66c641a11db849d24746c397862f3d968816f069c91  rates/rates.js
 f8b2973cbc9186330ba29103ef50244e0d00c5679e50865c1b58b31c38cc7e18  package.json
 d2eecdcc5514301a7491902420b05bcfc91aa0effbcc0cd8f7d39616d092d850  tsconfig.json
 cc2f97b27009eb1b120ef303698be2e3195b76ff1b0302dfcad4212b0301c3ff  docs/ACCEPTANCE.md
-77d54a47b60b90c6bd3e83e947931478e5eb53d8aae9d06386a99b46e3ef3b76  README.md
+5eb45a28d3589915c53dc40cec6b093a93c298b354db2fa045f24528f490b457  README.md
