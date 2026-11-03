@@ -41,7 +41,7 @@ gate: --max-miss-multiple 1.00 → exit 1
 v0.1.0 is not on npm yet. Install from source — three commands, each offline after the clone:
 
 ```bash
-git clone https://github.com/Naveen-Parashar/cacheproof.git
+git clone https://github.com/zorwerk/cacheproof.git
 cd cacheproof && npm install && npm run build
 npm link                       # puts `cacheproof` on your PATH
 
@@ -109,7 +109,7 @@ Until the npm release, build it once in the job from a pinned commit:
 ```yaml
 - name: build cacheproof
   run: |
-    git clone https://github.com/Naveen-Parashar/cacheproof.git tools/cacheproof
+    git clone https://github.com/zorwerk/cacheproof.git tools/cacheproof
     cd tools/cacheproof && git checkout v0.1.0 && npm ci && npm run build
 
 - name: prompt cache did not regress

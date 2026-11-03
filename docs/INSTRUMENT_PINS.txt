@@ -1,6 +1,6 @@
 # Instrument pins — cacheproof v0.1.1
-# captured 2026-11-03T22:05:18Z after D4 (span guard) + D5 (region_basis)
-# supersedes the v0.1.0 pin set (15 rows, README re-hashed for the clone-and-build quickstart)
+# captured 2026-11-03T22:07:32Z after the repo transfer to zorwerk/cacheproof
+# supersedes the 7c9fee1 pin set (URLs unchanged in source at that point)
 # sha256 · file
 
 a3316c09b22c1a4d188276f479bf904f32a0435c4d5cff7c104d2e67f4193dc8  src/canonical.ts
@@ -14,7 +14,7 @@ a7e81798a60018509d825c6c02000222b08c32aea1d7fd25f96c78e739ef64ae  src/report.ts
 b33ac3818ee5d4337f0ff04b620d78378dc1e3b7dde0c0cd3dfe5161fa992634  test/fixtures/derive_offsets.py
 94141b3671a1f75653a6f1823d28d6945b0941ec0dc0dbcfa0a5b6667422733b  test/fixtures/make_fixtures.py
 e4eb4664983787153136d66c641a11db849d24746c397862f3d968816f069c91  rates/rates.json
-a6e499c4e417a900f513544e83dbe975fad81d27d8f2c84b648a7307b7f41702  package.json
+eef00401e6150f31bfd85f3036a4235f1b58a9bff28903f0d4051b87745ffd5b  package.json
 d2eecdcc5514301a7491902420b05bcfc91aa0effbcc0cd8f7d39616d092d850  tsconfig.json
 d34c054de799afe456425fd303faf750beb694f7b1445b4cf91b319e586597fa  docs/ACCEPTANCE.md
-a338914bfd70afd50de1d938fa198e3267a0d21becf74595713721de607a9541  README.md
+017f39352951f657789dc93795b97e9ae27b80ffef8d848eb9fd992df8dc227a  README.md

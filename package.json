@@ -1,7 +1,15 @@
 {
   "name": "cacheproof",
   "version": "0.1.1",
-  "description": "Find the byte that killed your prompt cache — and what it cost.",
+  "description": "Find the byte that killed your prompt cache \u2014 and what it cost.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zorwerk/cacheproof.git"
+  },
+  "homepage": "https://github.com/zorwerk/cacheproof#readme",
+  "bugs": {
+    "url": "https://github.com/zorwerk/cacheproof/issues"
+  },
   "license": "MIT",
   "type": "commonjs",
   "bin": {
