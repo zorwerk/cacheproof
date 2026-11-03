@@ -125,6 +125,39 @@ function sharedCachedBlocks(a: Ingested, b: Ingested): number {
   return total;
 }
 
+/**
+ * Byte start of the newest turn in A — the first byte the user is *expected* to
+ * change on the next call. Everything above it is prefix they meant to keep.
+ */
+function newestTurnStart(a: Ingested): number | null {
+  const record = a.raw as { [key: string]: Json };
+  if (!Array.isArray(record.messages) || record.messages.length === 0) return null;
+  const lastPath = `messages[${record.messages.length - 1}]`;
+  let start: number | null = null;
+  for (const span of a.canonical.spans) {
+    if (span.path === lastPath || span.path.startsWith(`${lastPath}.`)) {
+      if (start === null || span.start < start) start = span.start;
+    }
+  }
+  return start;
+}
+
+/** True when the divergence lands above the newest turn: a stable prefix rotted. */
+function rottedAboveNewestTurn(a: Ingested, offset: number | null): boolean {
+  if (offset === null) return false;
+  const start = newestTurnStart(a);
+  if (start === null) return false;
+  return offset < start;
+}
+
+/** Span paths the divergence cuts through — a string or object that is only partly shared. */
+function straddlingPaths(a: Ingested, offset: number | null): string[] {
+  if (offset === null) return [];
+  return a.canonical.spans
+    .filter((span) => span.start < offset && offset < span.end)
+    .map((span) => span.path);
+}
+
 interface CompareOptions {
   provider: Provider;
   model?: string;
@@ -149,14 +182,33 @@ function comparePair(fileA: string, payloadA: Json, fileB: string, payloadB: Jso
   // region *is* the shared byte prefix, so it is derived from spans, not from paths.
   let regionA = a;
   let sharedBytes = b.cachedBytes;
+  let regionTruncated = false;
   const notes: string[] = ["token counts are estimated as canonical bytes / 4; cacheproof ships no tokeniser"];
 
   if (cacheMode === "implicit") {
     const shared = offset ?? b.canonical.bytes.length;
-    const regionPaths = a.canonical.spans
-      .filter((span) => span.end <= shared)
-      .map((span) => span.path);
-    regionA = { ...a, cachedPaths: regionPaths.length > 0 ? regionPaths : [], cachedBytes: shared };
+    const straddling = straddlingPaths(a, offset);
+
+    // An implicit provider declares no breakpoint, so "is this cached?" has to be
+    // decided from bytes: a divergence above the newest turn means the stable
+    // prefix rotted; a divergence inside the newest turn is new content, which
+    // costs a miss by design and is not a defect. That distinction is what
+    // separates a healthy append from a silent cache kill (F4, F5).
+    //
+    // Additions are never a breach: a path that did not exist in A cannot have been
+    // cached, so an append-only turn is clean by construction — no byte-prefix
+    // arithmetic, which sort_keys() breaks anyway (`messages` sorts before
+    // `system`, so appending truncates the document prefix at byte 105 while the
+    // cached block is 100% intact).
+    const additionsOnly = changes.length > 0 && changes.every((change) => change.kind === "array-item-added");
+    regionTruncated = !additionsOnly && rottedAboveNewestTurn(a, offset);
+
+    // Only a rotted prefix claims paths: the spans the divergence cuts through.
+    // Claiming "every span that ends before the offset" instead let the `messages`
+    // container stand in for the whole array, so an appended turn read as a change
+    // inside the cached region.
+    const claimed = regionTruncated ? straddling : [];
+    regionA = { ...a, cachedPaths: claimed, cachedBytes: shared };
     sharedBytes = shared;
     const floor = resolved.provider.implicit_prefix_min_tokens ?? 0;
     if (floor > 0 && estimateTokens(shared) < floor) {
@@ -172,7 +224,7 @@ function comparePair(fileA: string, payloadA: Json, fileB: string, payloadB: Jso
     if (offset === null) sharedBytes = b.cachedBytes;
   }
 
-  const classification = classify(regionA, b, changes);
+  const classification = classify(regionA, b, changes, { regionTruncated });
 
   const prefixBytes = cacheMode === "implicit" ? sharedBytes : b.cachedBytes;
   const priceInput: PriceInput = {
