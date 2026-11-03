@@ -74,7 +74,7 @@ const cases = fs
   .map((entry) => entry.name)
   .sort();
 
-check("fixture count is 13", cases.length === 13, `found ${cases.length}`);
+check("fixture count is 16", cases.length === 16, `found ${cases.length}`);
 
 for (const name of cases) {
   const dir = path.join(FIXTURES, name);
@@ -158,6 +158,32 @@ if (implicit.json) {
   check("deepseek miss cost 0.0000973", near(implicit.json.missCost, 0.0000973, 1e-9), `got ${implicit.json.missCost}`);
   check("deepseek multiple 5.84x", near(implicit.json.multiple, 5.8403, 0.01), `got ${implicit.json.multiple}`);
 }
+
+// ------------------------------------------------------- byte units (audit D1)
+section("byte units");
+// JavaScript string length is UTF-16 code units. Every number this tool prints is
+// a byte count, so it must survive text outside ASCII — that was audit D1.
+const { stableStringify } = require("../dist/canonical");
+const unicodeDir = path.join(FIXTURES, "encoding-unicode__hostile");
+const unicodePayload = JSON.parse(fs.readFileSync(path.join(unicodeDir, "a.json"), "utf8"));
+const unicodeCanonical = stableStringify(unicodePayload);
+check(
+  "canonical.bytes length equals Buffer.byteLength(text)",
+  unicodeCanonical.bytes.length === Buffer.byteLength(unicodeCanonical.text, "utf8"),
+  `${unicodeCanonical.bytes.length} vs ${Buffer.byteLength(unicodeCanonical.text, "utf8")}`,
+);
+check(
+  "multi-byte text makes byte length strictly greater than UTF-16 length",
+  unicodeCanonical.bytes.length > unicodeCanonical.text.length,
+  `bytes ${unicodeCanonical.bytes.length} · utf16 ${unicodeCanonical.text.length}`,
+);
+const unicodeExpected = JSON.parse(fs.readFileSync(path.join(unicodeDir, "expected.json"), "utf8"));
+check(
+  "the unicode fixture is pinned in bytes, not code units",
+  unicodeExpected.canonical_bytes_a === unicodeCanonical.bytes.length &&
+    unicodeExpected.canonical_bytes_a !== unicodeCanonical.text.length,
+  `pin ${unicodeExpected.canonical_bytes_a} · bytes ${unicodeCanonical.bytes.length} · utf16 ${unicodeCanonical.text.length}`,
+);
 
 // -------------------------------------------------------------- gate boundary
 section("gate");
@@ -248,6 +274,24 @@ const unknownProvider = run([
 ]);
 check("unknown provider is cannot-decide (2)", unknownProvider.code === 2, `got ${unknownProvider.code}`);
 
+// A UTF-8 BOM must be tolerated; a BOM'd file that is still not JSON must say why.
+section("encoding");
+const bomGarbage = path.join(tmp, "bom_garbage.json");
+fs.writeFileSync(bomGarbage, `\uFEFFthis is not json`, "utf8");
+const bomResult = run(["check", bomGarbage, bomGarbage]);
+check("BOM + invalid content is cannot-decide (2)", bomResult.code === 2, `got ${bomResult.code}`);
+check(
+  "BOM + invalid content names the BOM instead of blaming the syntax",
+  /BOM/.test(bomResult.stderr),
+  bomResult.stderr.trim().slice(0, 120),
+);
+const bomFixture = run([
+  "check",
+  path.join(FIXTURES, "encoding-bom__clean", "a.json"),
+  path.join(FIXTURES, "encoding-bom__clean", "b.json"),
+]);
+check("a valid BOM'd request pair is graded, not rejected", bomFixture.code === 0, `got ${bomFixture.code}`);
+
 // JSONL run: three stacked payloads, the middle one carrying a broken prefix.
 const cleanDir = path.join(FIXTURES, "r2-tool-order__clean");
 const runFile = path.join(tmp, "run.jsonl");
@@ -279,6 +323,22 @@ check("human output states the token estimate is an estimate", /estimated/.test(
 
 const rulesOut = run(["rules"]);
 check("rules command lists five ids plus the fallback", (rulesOut.stdout.match(/^ {2}[a-z-]+$/gm) || []).length === 6);
+
+// `--json` is documented as global, so `diff` must honour it (audit D2).
+const diffText = run(["diff", path.join(hostile, "a.json"), path.join(hostile, "b.json")]);
+check("diff without --json prints prose", /first divergence: byte \d+/.test(diffText.stdout));
+const diffJson = run(["diff", path.join(hostile, "a.json"), path.join(hostile, "b.json"), "--json"]);
+let diffParsed = null;
+try {
+  diffParsed = JSON.parse(diffJson.stdout);
+} catch {
+  diffParsed = null;
+}
+check("diff --json emits JSON", diffJson.code === 0 && diffParsed !== null, diffJson.stdout.slice(0, 80));
+if (diffParsed) {
+  check("diff --json carries the byte offset", typeof diffParsed.offset === "number");
+  check("diff --json carries a change list", Array.isArray(diffParsed.changes) && diffParsed.changes.length > 0);
+}
 
 const version = run(["--version"]);
 check("--version prints 0.1.0", version.stdout.trim() === "0.1.0", version.stdout.trim());

@@ -1,0 +1,12 @@
+{
+  "canonical_bytes_a": 920,
+  "canonical_bytes_b": 920,
+  "exit": 0,
+  "expected_byte_a": 50,
+  "expected_byte_b": 51,
+  "offset": 123,
+  "rule": null,
+  "shared_bytes": 123,
+  "unit": "utf-8 bytes",
+  "why": "multi-byte text in the tail only; the cached prefix is intact"
+}

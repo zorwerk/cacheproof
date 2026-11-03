@@ -118,7 +118,7 @@ export function ingest(raw: Json, provider: Provider, label: string): Ingested {
     const cachedBlocks = blocks.slice(0, lastBreakpoint + 1);
     const cachedPaths = cachedBlocks.map((block) => block.path);
     const cachedBlockTexts = cachedBlocks.map((block) => stableStringify(block.value).text);
-    const cachedBytes = cachedBlockTexts.reduce((total, text) => total + text.length, 0);
+    const cachedBytes = cachedBlockTexts.reduce((total, text) => total + Buffer.byteLength(text, "utf8"), 0);
     return {
       raw,
       canonical,
@@ -135,7 +135,7 @@ export function ingest(raw: Json, provider: Provider, label: string): Ingested {
     raw,
     canonical,
     cachedPaths: ["tools", "system", "messages"],
-    cachedBytes: canonical.text.length,
+    cachedBytes: canonical.bytes.length,
     cachedBlockTexts: [canonical.text],
   };
 }

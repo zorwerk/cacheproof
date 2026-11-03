@@ -2,10 +2,11 @@
   "canonical_bytes_a": 879,
   "canonical_bytes_b": 879,
   "exit": 1,
-  "expected_byte_a": "e",
-  "expected_byte_b": "u",
+  "expected_byte_a": 101,
+  "expected_byte_b": 117,
   "offset": 562,
   "rule": "tool-order",
   "shared_bytes": 562,
+  "unit": "utf-8 bytes",
   "why": "identical tool definitions, reversed array order"
 }

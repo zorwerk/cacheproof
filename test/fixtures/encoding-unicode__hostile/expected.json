@@ -1,0 +1,12 @@
+{
+  "canonical_bytes_a": 926,
+  "canonical_bytes_b": 926,
+  "exit": 1,
+  "expected_byte_a": 65,
+  "expected_byte_b": 66,
+  "offset": 564,
+  "rule": "unclassified-cached-change",
+  "shared_bytes": 564,
+  "unit": "utf-8 bytes",
+  "why": "divergence lands after multi-byte text; offsets must be UTF-8 bytes, not UTF-16 units"
+}

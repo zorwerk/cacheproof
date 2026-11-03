@@ -2,10 +2,11 @@
   "canonical_bytes_a": 894,
   "canonical_bytes_b": 894,
   "exit": 0,
-  "expected_byte_a": "0",
-  "expected_byte_b": "3",
+  "expected_byte_a": 48,
+  "expected_byte_b": 51,
   "offset": 107,
   "rule": null,
   "shared_bytes": 107,
+  "unit": "utf-8 bytes",
   "why": "volatile value is below the cache breakpoint; the cached prefix is intact"
 }

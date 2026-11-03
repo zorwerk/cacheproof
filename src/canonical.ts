@@ -19,12 +19,15 @@ export type Json = null | boolean | number | string | Json[] | { [key: string]: 
 export interface Span {
   /** Dotted path, e.g. `system[0].text`, `messages[0].content[1].text`, `tools[0]`. */
   path: string;
+  /** Offsets are **UTF-8 bytes**, not JavaScript string indices. */
   start: number;
   end: number;
 }
 
 export interface Canonical {
   text: string;
+  /** The same content as `text`, as UTF-8 bytes — what every offset and length refers to. */
+  bytes: Buffer;
   spans: Span[];
 }
 
@@ -33,9 +36,12 @@ export function stableStringify(value: Json): Canonical {
   const spans: Span[] = [];
   let length = 0;
 
+  // Byte length, not string length: `cacheproof` names bytes, so every number it
+  // prints must be a byte count. A UTF-16 code unit is not a byte the moment the
+  // prompt contains anything outside ASCII (audit D1).
   const push = (chunk: string): void => {
     parts.push(chunk);
-    length += chunk.length;
+    length += Buffer.byteLength(chunk, "utf8");
   };
 
   const walk = (node: Json | undefined, path: string): void => {
@@ -86,16 +92,41 @@ export function stableStringify(value: Json): Canonical {
   };
 
   walk(value, "");
-  return { text: parts.join(""), spans };
+  const text = parts.join("");
+  return { text, bytes: Buffer.from(text, "utf8"), spans };
 }
 
-/** First index at which two strings differ; `null` when one is a prefix of the other or they match. */
-export function firstDivergence(a: string, b: string): number | null {
+/** First byte index at which two canonical streams differ; `null` when one is a prefix or they match. */
+export function firstDivergence(a: Buffer, b: Buffer): number | null {
   const limit = Math.min(a.length, b.length);
   for (let i = 0; i < limit; i += 1) {
     if (a[i] !== b[i]) return i;
   }
   return a.length === b.length ? null : limit;
+}
+
+/** UTF-8 width of the character starting at `index` (1–4 bytes). */
+function charWidth(text: string, index: number): number {
+  const code = text.codePointAt(index) ?? 0;
+  return Buffer.byteLength(String.fromCodePoint(code), "utf8");
+}
+
+/** The substring covering a byte range, without splitting a multi-byte character. */
+export function byteSlice(text: string, startByte: number, endByte: number): string {
+  let bytes = 0;
+  let index = 0;
+  while (index < text.length && bytes < startByte) {
+    const width = charWidth(text, index);
+    bytes += width;
+    index += width === 4 ? 2 : 1;
+  }
+  const start = index;
+  while (index < text.length && bytes < endByte) {
+    const width = charWidth(text, index);
+    bytes += width;
+    index += width === 4 ? 2 : 1;
+  }
+  return text.slice(start, index);
 }
 
 export function deepEqual(a: Json | undefined, b: Json | undefined): boolean {

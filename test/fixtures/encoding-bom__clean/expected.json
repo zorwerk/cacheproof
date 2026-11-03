@@ -1,0 +1,12 @@
+{
+  "canonical_bytes_a": 879,
+  "canonical_bytes_b": 879,
+  "exit": 0,
+  "expected_byte_a": 50,
+  "expected_byte_b": 51,
+  "offset": 82,
+  "rule": null,
+  "shared_bytes": 82,
+  "unit": "utf-8 bytes",
+  "why": "a UTF-8 BOM must not turn a valid request into a cannot-decide"
+}

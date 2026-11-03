@@ -96,6 +96,10 @@ class of bug survives in the first place.
 - **Token counts are estimated** as canonical bytes / 4. `cacheproof` ships no tokeniser, because a
   tokeniser per provider is a dependency tree per provider. The *arithmetic* is exact and
   unit-tested; the absolute token count is labelled `~` everywhere on purpose.
+- **Every byte count is a UTF-8 byte, never a code unit.** Offsets, canonical sizes and the shared
+  prefix are measured on the encoded bytes, so non-ASCII text in a prompt (emoji, CJK, accented
+  identifiers) is reported at its true wire position. A UTF-8 BOM is stripped before parsing rather
+  than being reported as corrupt JSON.
 - **The byte offset is canonical, not wire.** Keys are sorted and whitespace removed before
   comparison, so `byte 255` is a position in that canonical stream, not necessarily the integer your
   provider would print. It is stable across runs and comparable between two requests — which is what
@@ -117,7 +121,8 @@ report. If your provider changed price, edit the file — do not wait for a rele
   evaluate it.
 - **Two canonicalisers.** Offsets in the test suite are derived by an independent Python
   implementation (`test/fixtures/derive_offsets.py`), so the TypeScript code has something to agree
-  with that it did not write.
+  with that it did not write. Both sides compare UTF-8 bytes; the fixture set includes unicode and
+  BOM payloads, because an all-ASCII fixture set agrees with itself no matter which unit you count.
 - **Failures are loud.** When no rule matches a broken prefix, the verdict is still a failure. The
   category `unclassified-cached-change` exists so that "I don't know" can never be mistaken for "fine".
 

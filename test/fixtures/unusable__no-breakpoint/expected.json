@@ -5,5 +5,6 @@
   "offset": null,
   "rule": null,
   "shared_bytes": 842,
+  "unit": "utf-8 bytes",
   "why": "provider anthropic needs an explicit cache_control breakpoint; none declared"
 }

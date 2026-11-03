@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
-"""Independent derivation of the expected first-divergence offset.
+"""Independent derivation of the expected first-divergence offset — IN BYTES.
 
 Two implementations must agree before an offset means anything:
-  * this one (Python, json.dumps sorted keys, separators=(',', ':')),
-  * the TypeScript canonicaliser in src/canonical.ts.
+  * this one (Python, json.dumps sorted keys, separators=(',', ':'), UTF-8 bytes),
+  * the TypeScript canonicaliser in src/canonical.ts (also UTF-8 bytes since the
+    D1 fix).
 They are written from the same one-line spec — "sorted keys, no insignificant
-whitespace" — not from each other. Independence is exact for ASCII payloads,
-which is why every fixture is ASCII.
+whitespace, positions counted in UTF-8 bytes" — not from each other.
 
-Writes "offset" (and "shared_bytes") into each expected.json.
+Audit history: the first version of this file computed offsets in Python string
+indices while the tool computed them in JavaScript string indices. Both are UTF-16
+code units for anything outside ASCII, so the two "independent" implementations
+shared a blind spot and agreed on every ASCII fixture (Iris, D1). They now compare
+bytes, and three fixtures carry multi-byte text so the distinction is testable.
+
+Files are read as utf-8-sig so a BOM'd fixture is still a fixture.
+
+Writes "offset", "shared_bytes", "canonical_bytes_a/b" into each expected.json.
 Run:  python3 derive_offsets.py
 """
 import json
@@ -18,11 +26,12 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def canonical(obj):
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+def canonical_bytes(obj):
+    text = json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return text.encode("utf-8")
 
 
-def first_divergence(a, b):
+def first_divergence(a: bytes, b: bytes):
     n = min(len(a), len(b))
     for i in range(n):
         if a[i] != b[i]:
@@ -40,11 +49,11 @@ def main():
         pe = os.path.join(d, "expected.json")
         if not (os.path.exists(pa) and os.path.exists(pb) and os.path.exists(pe)):
             continue
-        with open(pa, encoding="utf-8") as fh:
+        with open(pa, encoding="utf-8-sig") as fh:
             a = json.load(fh)
-        with open(pb, encoding="utf-8") as fh:
+        with open(pb, encoding="utf-8-sig") as fh:
             b = json.load(fh)
-        ca, cb = canonical(a), canonical(b)
+        ca, cb = canonical_bytes(a), canonical_bytes(b)
         off = first_divergence(ca, cb)
         with open(pe, encoding="utf-8") as fh:
             exp = json.load(fh)
@@ -56,6 +65,7 @@ def main():
             exp["shared_bytes"] = off
             exp["expected_byte_a"] = ca[off]
             exp["expected_byte_b"] = cb[off]
+        exp["unit"] = "utf-8 bytes"
         exp["canonical_bytes_a"] = len(ca)
         exp["canonical_bytes_b"] = len(cb)
         with open(pe, "w", encoding="utf-8") as fh:
@@ -66,7 +76,7 @@ def main():
     print(f"{'case':38s} {'rule':32s} exit  offset   |a|    |b|")
     for r in rows:
         print(f"{r[0]:38s} {str(r[1]):32s} {r[2]:4d}  {str(r[3]):7s} {r[4]:6d} {r[5]:6d}")
-    print(f"\n{len(rows)} fixtures")
+    print(f"\n{len(rows)} fixtures · offsets in utf-8 bytes")
     return 0
 
 

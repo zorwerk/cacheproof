@@ -76,11 +76,12 @@ def default_messages():
     return [{"role": "user", "content": [{"type": "text", "text": QUESTION_A}]}]
 
 
-def write_case(name, a, b, expected):
+def write_case(name, a, b, expected, bom=False):
     d = os.path.join(HERE, name)
     os.makedirs(d, exist_ok=True)
+    enc = "utf-8-sig" if bom else "utf-8"
     for fn, obj in (("a.json", a), ("b.json", b)):
-        with open(os.path.join(d, fn), "w", encoding="utf-8") as fh:
+        with open(os.path.join(d, fn), "w", encoding=enc) as fh:
             json.dump(obj, fh, indent=2, sort_keys=False)
             fh.write("\n")
     with open(os.path.join(d, "expected.json"), "w", encoding="utf-8") as fh:
@@ -92,8 +93,8 @@ def write_case(name, a, b, expected):
 CASES = []
 
 
-def case(name, a, b, expected):
-    CASES.append(write_case(name, a, b, expected))
+def case(name, a, b, expected, bom=False):
+    CASES.append(write_case(name, a, b, expected, bom=bom))
 
 
 # ---------------------------------------------------------------- R1 volatile
@@ -212,6 +213,35 @@ case("split-point__known", split_a, split_b, {
     "why": "single in-prefix edit that matches no named volatile pattern",
     "offset_derived_by": "derive_offsets.py (independent of the ts canonicaliser)",
 })
+
+# ------------------------------------------------- encoding (audit D1 regression)
+# The divergence lands AFTER multi-byte text, so a UTF-16 code-unit implementation
+# reports a smaller offset than the true UTF-8 byte offset. An all-ASCII suite is
+# blind to that by construction.
+UNICODE_PREFIX = "Stable \u2615\ufe0f \u65e5\u672c\u8a9e \u00e9 \U0001f680 prefix.\n"
+uni_a = [{"type": "text", "text": UNICODE_PREFIX + HOUSE_RULES + "MARK-A", "cache_control": dict(BREAK)}]
+uni_b = [{"type": "text", "text": UNICODE_PREFIX + HOUSE_RULES + "MARK-B", "cache_control": dict(BREAK)}]
+case("encoding-unicode__hostile", payload(system=uni_a), payload(system=uni_b), {
+    "rule": "unclassified-cached-change",
+    "exit": 1,
+    "why": "divergence lands after multi-byte text; offsets must be UTF-8 bytes, not UTF-16 units",
+})
+
+uni_msgs_a = [{"role": "user", "content": [{"type": "text", "text": UNICODE_PREFIX + QUESTION_A}]}]
+uni_msgs_b = [{"role": "user", "content": [{"type": "text", "text": UNICODE_PREFIX + QUESTION_B}]}]
+case("encoding-unicode__clean", payload(messages=uni_msgs_a), payload(messages=uni_msgs_b), {
+    "rule": None,
+    "exit": 0,
+    "why": "multi-byte text in the tail only; the cached prefix is intact",
+})
+
+# A JSON file saved with a UTF-8 BOM is still JSON (audit D3).
+case("encoding-bom__clean", payload(), payload(messages=(
+    [{"role": "user", "content": [{"type": "text", "text": QUESTION_B}]}])), {
+    "rule": None,
+    "exit": 0,
+    "why": "a UTF-8 BOM must not turn a valid request into a cannot-decide",
+}, bom=True)
 
 if __name__ == "__main__":
     print(f"wrote {len(CASES)} fixtures")

@@ -13,7 +13,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { Json, estimateTokens, firstDivergence } from "./canonical";
+import { Json, byteSlice, estimateTokens, firstDivergence } from "./canonical";
 import { Change, diffJson } from "./diff";
 import { classify } from "./classify";
 import {
@@ -85,19 +85,20 @@ function readPayloads(file: string): Json[] {
     throw new IngestError(`cannot read ${file}`);
   }
   try {
-    return [JSON.parse(raw) as Json];
+    return [JSON.parse(raw.replace(/^\uFEFF/, "")) as Json];
   } catch {
     // JSONL: one JSON value per non-empty line.
   }
   const values: Json[] = [];
   const lines = raw.split(/\r?\n/);
   lines.forEach((line, index) => {
-    const trimmed = line.trim();
+    const trimmed = line.replace(/^\uFEFF/, "").trim();
     if (!trimmed) return;
     try {
       values.push(JSON.parse(trimmed) as Json);
     } catch {
-      throw new IngestError(`${file}:${index + 1}: neither a JSON document nor a JSONL line`);
+      const bomHint = index === 0 && raw.startsWith("\uFEFF") ? " (file starts with a UTF-8 BOM)" : "";
+      throw new IngestError(`${file}:${index + 1}: neither a JSON document nor a JSONL line${bomHint}`);
     }
   });
   if (values.length === 0) throw new IngestError(`${file}: empty`);
@@ -105,19 +106,18 @@ function readPayloads(file: string): Json[] {
 }
 
 function contextAround(text: string, offset: number, radius = 44): string {
-  const start = Math.max(0, offset - radius);
-  const end = Math.min(text.length, offset + radius);
-  const window = text.slice(start, end).replace(/\n/g, "\\n");
-  const lead = start > 0 ? "" : "";
-  return `${lead}${window}`;
+  // `offset` is a UTF-8 byte index; slice by bytes so a multi-byte character is
+  // never cut in half and the window still lines up with the offset printed.
+  return byteSlice(text, Math.max(0, offset - radius), offset + radius).replace(/\n/g, "\\n");
 }
 
 function sharedCachedBlocks(a: Ingested, b: Ingested): number {
   let total = 0;
   const limit = Math.min(a.cachedBlockTexts.length, b.cachedBlockTexts.length);
   for (let index = 0; index < limit; index += 1) {
-    if (a.cachedBlockTexts[index] === b.cachedBlockTexts[index]) {
-      total += (a.cachedBlockTexts[index] as string).length;
+    const left = a.cachedBlockTexts[index];
+    if (left === b.cachedBlockTexts[index] && left !== undefined) {
+      total += Buffer.byteLength(left, "utf8");
     } else {
       break;
     }
@@ -142,7 +142,7 @@ function comparePair(fileA: string, payloadA: Json, fileB: string, payloadB: Jso
   const a = ingest(payloadA, options.provider, fileA);
   const b = ingest(payloadB, options.provider, fileB);
 
-  const offset = firstDivergence(a.canonical.text, b.canonical.text);
+  const offset = firstDivergence(a.canonical.bytes, b.canonical.bytes);
   const changes = diffJson(a.raw, b.raw);
 
   // For an implicit-prefix provider there is no breakpoint to violate: the cached
@@ -152,7 +152,7 @@ function comparePair(fileA: string, payloadA: Json, fileB: string, payloadB: Jso
   const notes: string[] = ["token counts are estimated as canonical bytes / 4; cacheproof ships no tokeniser"];
 
   if (cacheMode === "implicit") {
-    const shared = offset ?? b.canonical.text.length;
+    const shared = offset ?? b.canonical.bytes.length;
     const regionPaths = a.canonical.spans
       .filter((span) => span.end <= shared)
       .map((span) => span.path);
@@ -177,7 +177,7 @@ function comparePair(fileA: string, payloadA: Json, fileB: string, payloadB: Jso
   const prefixBytes = cacheMode === "implicit" ? sharedBytes : b.cachedBytes;
   const priceInput: PriceInput = {
     prefixTokens: estimateTokens(prefixBytes),
-    totalTokens: estimateTokens(b.canonical.text.length),
+    totalTokens: estimateTokens(b.canonical.bytes.length),
   };
   const price = computePrice(priceInput, resolved.rate, cacheMode);
 
@@ -200,8 +200,8 @@ function comparePair(fileA: string, payloadA: Json, fileB: string, payloadB: Jso
     provider: options.provider,
     model: resolved.model,
     rates: table,
-    aBytes: a.canonical.text.length,
-    bBytes: b.canonical.text.length,
+    aBytes: a.canonical.bytes.length,
+    bBytes: b.canonical.bytes.length,
     cachedBytesA: a.cachedBytes,
     cachedBytesB: b.cachedBytes,
     sharedBytes,
@@ -386,12 +386,34 @@ function main(argv: string[]): number {
       const { ctx, exitCode } = comparePair(fileA, payloadA, fileB, payloadB, options);
       worstExit = Math.max(worstExit, exitCode);
       if (parsed.command === "diff") {
-        const lines = [
-          `${fileA} vs ${fileB}`,
-          `first divergence: ${ctx.offset === null ? "none" : `byte ${ctx.offset}`}`,
-          ...ctx.changes.map((change: Change) => `  ${change.kind.padEnd(18)} ${change.path}`),
-        ];
-        rendered.push(lines.join("\n"));
+        if (json) {
+          rendered.push(
+            JSON.stringify(
+              {
+                tool: "cacheproof",
+                version: VERSION,
+                a: fileA,
+                b: fileB,
+                offset: ctx.offset,
+                clean: ctx.clean,
+                changes: ctx.changes.map((change: Change) => ({
+                  path: change.path,
+                  kind: change.kind,
+                  index: change.index ?? null,
+                })),
+              },
+              null,
+              2,
+            ),
+          );
+        } else {
+          const lines = [
+            `${fileA} vs ${fileB}`,
+            `first divergence: ${ctx.offset === null ? "none" : `byte ${ctx.offset}`}`,
+            ...ctx.changes.map((change: Change) => `  ${change.kind.padEnd(18)} ${change.path}`),
+          ];
+          rendered.push(lines.join("\n"));
+        }
       } else {
         rendered.push(json ? renderJson(ctx).trimEnd() : renderHuman(ctx).trimEnd());
       }

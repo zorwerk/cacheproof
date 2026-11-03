@@ -2,10 +2,11 @@
   "canonical_bytes_a": 879,
   "canonical_bytes_b": 32,
   "exit": 2,
-  "expected_byte_a": "m",
-  "expected_byte_b": "n",
+  "expected_byte_a": 109,
+  "expected_byte_b": 110,
   "offset": 2,
   "rule": null,
   "shared_bytes": 2,
+  "unit": "utf-8 bytes",
   "why": "no model/system/messages shape: not comparable"
 }
