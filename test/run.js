@@ -177,6 +177,48 @@ check(
   unicodeCanonical.bytes.length > unicodeCanonical.text.length,
   `bytes ${unicodeCanonical.bytes.length} · utf16 ${unicodeCanonical.text.length}`,
 );
+
+// Audit D4: the span accounting feeds the implicit-prefix region derivation, and no test failed when
+// `Buffer.byteLength(chunk, "utf8")` in canonical.ts was reverted to `chunk.length`. Two independent
+// checks, neither of which reuses the implementation's arithmetic:
+//   (a) each span slice, decoded strictly, must be a complete JSON string token — a code-unit offset
+//       lands mid-character on CJK text and a fatal UTF-8 decode throws;
+//   (b) the last span must end exactly at the canonical byte length.
+const cjkPayload = {
+  system: [{ text: `キャッシュ ${"α".repeat(40)} 安定`, type: "text" }],
+  user: "日本語テキスト",
+};
+const cjkCanonical = stableStringify(cjkPayload);
+const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
+const spanSlices = cjkCanonical.spans.map((span) => {
+  try {
+    return strictUtf8.decode(cjkCanonical.bytes.subarray(span.start, span.end));
+  } catch {
+    return null;
+  }
+});
+check(
+  "every span boundary falls on a character boundary in the canonical BYTES",
+  spanSlices.every((slice) => slice !== null) &&
+    spanSlices.filter((slice) => slice.startsWith('"')).length >= 3,
+  `spans ${cjkCanonical.spans.map((s) => `${s.start}-${s.end}`).join(" ")}`,
+);
+check(
+  "the last span ends exactly at the canonical byte length",
+  cjkCanonical.spans[cjkCanonical.spans.length - 1].end === cjkCanonical.bytes.length &&
+    cjkCanonical.bytes.length > cjkCanonical.text.length,
+  `end ${cjkCanonical.spans[cjkCanonical.spans.length - 1].end} · bytes ${cjkCanonical.bytes.length} · utf16 ${cjkCanonical.text.length}`,
+);
+// The same invariant must hold on ASCII, where bytes and code units coincide. Stated separately so
+// the pair is explicit: ASCII passes both before and after a units mutation (it cannot discriminate),
+// CJK passes only on correct bytes. A test that failed on ASCII would be broken, not strict.
+const asciiCanonical = stableStringify({ system: [{ text: "plain ascii prompt", type: "text" }] });
+check(
+  "the same span invariant holds on ASCII (bytes == code units there)",
+  asciiCanonical.spans[asciiCanonical.spans.length - 1].end === asciiCanonical.bytes.length &&
+    asciiCanonical.bytes.length === asciiCanonical.text.length,
+  `end ${asciiCanonical.spans[asciiCanonical.spans.length - 1].end} · bytes ${asciiCanonical.bytes.length}`,
+);
 const unicodeExpected = JSON.parse(fs.readFileSync(path.join(unicodeDir, "expected.json"), "utf8"));
 check(
   "the unicode fixture is pinned in bytes, not code units",
@@ -340,6 +382,81 @@ fs.writeFileSync(jsonlSingle, p1);
 const single = run(["check", jsonlSingle]);
 check("one file with one payload cannot decide (2)", single.code === 2, `got ${single.code}`);
 
+// ------------------------------------------------- implicit prefix (D4 / D1c)
+section("region");
+// OpenAI declares no breakpoint, so the cached region is the shared byte prefix, derived from span
+// ends. Iris's D1c: a CJK payload whose change lands *after* the prefix must stay clean and outside
+// the region. Nothing in the suite failed when the span arithmetic was reverted to code units, so
+// this is the end-to-end half of that hole.
+function cjkPair(tag, tailA, tailB, prefixText) {
+  const make = (tail) => ({
+    model: "gpt-4o",
+    messages: [{ role: "user", content: `${prefixText}${tail}` }],
+  });
+  const pa = path.join(tmp, `${tag}_a.json`);
+  const pb = path.join(tmp, `${tag}_b.json`);
+  fs.writeFileSync(pa, JSON.stringify(make(tailA)), "utf8");
+  fs.writeFileSync(pb, JSON.stringify(make(tailB)), "utf8");
+  return [pa, pb];
+}
+const cjkPrefix = `安定した前置き ${"日本語".repeat(30)} `;
+const [afterA, afterB] = cjkPair("implicit_after", "ALPHA", "ALPHA2", cjkPrefix);
+const afterResult = runJson(["check", afterA, afterB, "--provider", "openai"]);
+check(
+  "implicit prefix + CJK: a change after the prefix stays clean (exit 0)",
+  afterResult.code === 0,
+  `exit ${afterResult.code} · ${afterResult.stderr.trim()}`,
+);
+check(
+  "implicit prefix + CJK: the change is outside the cached region",
+  afterResult.json !== null &&
+    afterResult.json.classification.in_cached_region === false &&
+    afterResult.json.classification.rule === null,
+  JSON.stringify(afterResult.json && afterResult.json.classification),
+);
+// Control: same provider and encoding, but the change is one that must always be classified — a model
+// swap. It proves the region logic is live for openai on this path, so the clean verdict above is a
+// measurement and not a tool that stopped classifying.
+const modelA = path.join(tmp, "implicit_model_a.json");
+const modelB = path.join(tmp, "implicit_model_b.json");
+fs.writeFileSync(modelA, JSON.stringify({ model: "gpt-4o", messages: [{ role: "user", content: cjkPrefix }] }), "utf8");
+fs.writeFileSync(modelB, JSON.stringify({ model: "gpt-4-turbo", messages: [{ role: "user", content: cjkPrefix }] }), "utf8");
+const modelResult = runJson(["check", modelA, modelB, "--provider", "openai"]);
+check(
+  "implicit prefix + CJK control: a model swap is classified (exit 1, in region)",
+  modelResult.code === 1 &&
+    modelResult.json !== null &&
+    modelResult.json.classification.in_cached_region === true,
+  `exit ${modelResult.code} · ${JSON.stringify(modelResult.json && modelResult.json.classification)}`,
+);
+// D5: one number, two objects — the report must name which object it counted.
+const explicitRun = runJson(["check", path.join(hostile, "a.json"), path.join(hostile, "b.json")]);
+check(
+  "explicit breakpoint names its region basis (cached_blocks)",
+  explicitRun.json !== null && explicitRun.json.requests.region_basis === "cached_blocks",
+  JSON.stringify(explicitRun.json && explicitRun.json.requests),
+);
+check(
+  "implicit prefix names its region basis (shared_prefix)",
+  afterResult.json !== null && afterResult.json.requests.region_basis === "shared_prefix",
+  JSON.stringify(afterResult.json && afterResult.json.requests),
+);
+check(
+  "human output states which object the shared number counts",
+  /region: (explicit breakpoint|implicit prefix)/.test(
+    run(["check", path.join(hostile, "a.json"), path.join(hostile, "b.json")]).stdout,
+  ),
+);
+// D5 rename: `cached_region_bytes` is the name; `shared_bytes` stays for one release as a documented
+// alias, because v0.1.0 shipped that key meaning two different objects.
+check(
+  "cached_region_bytes is present and equal to the deprecated alias",
+  afterResult.json !== null &&
+    typeof afterResult.json.requests.cached_region_bytes === "number" &&
+    afterResult.json.requests.cached_region_bytes === afterResult.json.requests.shared_bytes,
+  JSON.stringify(afterResult.json && afterResult.json.requests),
+);
+
 // ------------------------------------------------------------ output contract
 section("output");
 const text = run(["check", path.join(hostile, "a.json"), path.join(hostile, "b.json")]);
@@ -368,7 +485,7 @@ if (diffParsed) {
 }
 
 const version = run(["--version"]);
-check("--version prints 0.1.0", version.stdout.trim() === "0.1.0", version.stdout.trim());
+check("--version prints 0.1.1", version.stdout.trim() === "0.1.1", version.stdout.trim());
 
 // ----------------------------------------------------------------------------
 fs.rmSync(tmp, { recursive: true, force: true });

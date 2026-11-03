@@ -1,6 +1,6 @@
 {
   "name": "cacheproof",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Find the byte that killed your prompt cache — and what it cost.",
   "license": "MIT",
   "type": "commonjs",

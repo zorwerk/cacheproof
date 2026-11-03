@@ -14,7 +14,7 @@ Offline. Zero runtime dependencies. No API key, no network, no telemetry, no pro
 ```
 $ cacheproof check requests/008.json requests/009.json --calls 18420
 
-cacheproof 0.1.0 — Pricing: Nov 2026 — Anthropic / OpenAI / DeepSeek public rates
+cacheproof 0.1.1 — Pricing: Nov 2026 — Anthropic / OpenAI / DeepSeek public rates
 provider anthropic · model claude-3-5-sonnet · breakpoint system[0]
 
 request A  916 B canonical (~229 tokens, estimated)
@@ -86,6 +86,21 @@ cacheproof rules                                     # the five rule ids
 
 Options: `--provider anthropic|openai|deepseek` · `--model <name>` · `--rates <file>` ·
 `--max-miss-multiple <n>` (default 1.0) · `--calls <n>` · `--json`.
+
+### The JSON contract, and one number that used to lie
+
+`requests.cached_region_bytes` is the number of bytes the two requests hold in common **as a cached
+region**. What that region *is* depends on the provider, so the report names the object it counted in
+`requests.region_basis`:
+
+| `region_basis` | meaning of `cached_region_bytes` |
+|---|---|
+| `cached_blocks` | an explicit breakpoint was declared (Anthropic): the cached blocks A and B hold in common |
+| `shared_prefix` | no breakpoint (OpenAI, DeepSeek): the shared byte prefix, since there are no blocks |
+
+`requests.shared_bytes` carries the **same value** and is a deprecated alias kept for one release:
+v0.1.0 shipped that key with both meanings above and no way to tell which one you were reading. Read
+`cached_region_bytes` plus `region_basis`; `shared_bytes` will be removed in v0.2.
 
 ### In CI
 

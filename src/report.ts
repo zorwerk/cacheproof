@@ -13,6 +13,13 @@ export interface ReportContext {
   cachedBytesA: number;
   cachedBytesB: number;
   sharedBytes: number;
+  /**
+   * What `sharedBytes` is a count OF (audit D5). Under an explicit breakpoint it is the bytes of the
+   * cached blocks that A and B hold in common; under an implicit prefix there are no blocks, so it is
+   * the shared byte prefix. One number, two objects — this field makes the object sayable instead of
+   * inferable from the provider.
+   */
+  regionBasis: "cached_blocks" | "shared_prefix";
   breakpointPath?: string;
   offset: number | null;
   contextA: string;
@@ -46,9 +53,14 @@ export function renderHuman(ctx: ReportContext): string {
   lines.push(`request A  ${human(ctx.aBytes)} canonical (~${Math.round(ctx.aBytes / 4)} tokens, estimated)`);
   lines.push(`request B  ${human(ctx.bBytes)} canonical (~${Math.round(ctx.bBytes / 4)} tokens, estimated)`);
   const share = ctx.cachedBytesB > 0 ? (ctx.sharedBytes / ctx.cachedBytesB) * 100 : 0;
+  const basisLine =
+    ctx.regionBasis === "shared_prefix"
+      ? `  region: implicit prefix — shared bytes are the common byte prefix, not blocks`
+      : `  region: explicit breakpoint — shared bytes are cached blocks held in common`;
   lines.push(
     `cached prefix  A ${human(ctx.cachedBytesA)} · B ${human(ctx.cachedBytesB)} · shared ${human(ctx.sharedBytes)} (${share.toFixed(1)}%)`,
   );
+  lines.push(basisLine);
   lines.push("");
 
   if (ctx.offset === null) {
@@ -128,6 +140,10 @@ export function renderJson(ctx: ReportContext): string {
       requests: {
         a: { canonical_bytes: ctx.aBytes, cached_bytes: ctx.cachedBytesA },
         b: { canonical_bytes: ctx.bBytes, cached_bytes: ctx.cachedBytesB },
+        region_basis: ctx.regionBasis,
+        cached_region_bytes: ctx.sharedBytes,
+        // Deprecated alias, kept for one release: v0.1.0 shipped this key with two different senses
+        // (audit D5). Same value as `cached_region_bytes`; `region_basis` says which object it counts.
         shared_bytes: ctx.sharedBytes,
       },
       breakpoint: ctx.breakpointPath ?? null,

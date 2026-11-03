@@ -27,7 +27,7 @@ import {
 import { PriceInput, RateError, computePrice, loadRates, resolveRate } from "./price";
 import { ReportContext, renderHuman, renderJson } from "./report";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.1.1";
 
 interface Parsed {
   command: string;
@@ -205,6 +205,7 @@ function comparePair(fileA: string, payloadA: Json, fileB: string, payloadB: Jso
     cachedBytesA: a.cachedBytes,
     cachedBytesB: b.cachedBytes,
     sharedBytes,
+    regionBasis: cacheMode === "implicit" ? "shared_prefix" : "cached_blocks",
     breakpointPath: cacheMode === "explicit" ? a.breakpointPath : undefined,
     offset,
     contextA: offset === null ? "" : contextAround(a.canonical.text, offset),
