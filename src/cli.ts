@@ -15,7 +15,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { Json, byteSlice, estimateTokens, firstDivergence } from "./canonical";
 import { Change, diffJson } from "./diff";
-import { classify } from "./classify";
+import { RULE_DESCRIPTIONS, RULE_IDS, classify } from "./classify";
 import {
   Provider,
   PROVIDERS,
@@ -27,7 +27,7 @@ import {
 import { PriceInput, RateError, computePrice, loadRates, resolveRate } from "./price";
 import { ReportContext, renderHuman, renderJson } from "./report";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.1.1";
 
 interface Parsed {
   command: string;
@@ -125,6 +125,39 @@ function sharedCachedBlocks(a: Ingested, b: Ingested): number {
   return total;
 }
 
+/**
+ * Byte start of the newest turn in A — the first byte the user is *expected* to
+ * change on the next call. Everything above it is prefix they meant to keep.
+ */
+function newestTurnStart(a: Ingested): number | null {
+  const record = a.raw as { [key: string]: Json };
+  if (!Array.isArray(record.messages) || record.messages.length === 0) return null;
+  const lastPath = `messages[${record.messages.length - 1}]`;
+  let start: number | null = null;
+  for (const span of a.canonical.spans) {
+    if (span.path === lastPath || span.path.startsWith(`${lastPath}.`)) {
+      if (start === null || span.start < start) start = span.start;
+    }
+  }
+  return start;
+}
+
+/** True when the divergence lands above the newest turn: a stable prefix rotted. */
+function rottedAboveNewestTurn(a: Ingested, offset: number | null): boolean {
+  if (offset === null) return false;
+  const start = newestTurnStart(a);
+  if (start === null) return false;
+  return offset < start;
+}
+
+/** Span paths the divergence cuts through — a string or object that is only partly shared. */
+function straddlingPaths(a: Ingested, offset: number | null): string[] {
+  if (offset === null) return [];
+  return a.canonical.spans
+    .filter((span) => span.start < offset && offset < span.end)
+    .map((span) => span.path);
+}
+
 interface CompareOptions {
   provider: Provider;
   model?: string;
@@ -149,14 +182,33 @@ function comparePair(fileA: string, payloadA: Json, fileB: string, payloadB: Jso
   // region *is* the shared byte prefix, so it is derived from spans, not from paths.
   let regionA = a;
   let sharedBytes = b.cachedBytes;
+  let regionTruncated = false;
   const notes: string[] = ["token counts are estimated as canonical bytes / 4; cacheproof ships no tokeniser"];
 
   if (cacheMode === "implicit") {
     const shared = offset ?? b.canonical.bytes.length;
-    const regionPaths = a.canonical.spans
-      .filter((span) => span.end <= shared)
-      .map((span) => span.path);
-    regionA = { ...a, cachedPaths: regionPaths.length > 0 ? regionPaths : [], cachedBytes: shared };
+    const straddling = straddlingPaths(a, offset);
+
+    // An implicit provider declares no breakpoint, so "is this cached?" has to be
+    // decided from bytes: a divergence above the newest turn means the stable
+    // prefix rotted; a divergence inside the newest turn is new content, which
+    // costs a miss by design and is not a defect. That distinction is what
+    // separates a healthy append from a silent cache kill (F4, F5).
+    //
+    // Additions are never a breach: a path that did not exist in A cannot have been
+    // cached, so an append-only turn is clean by construction — no byte-prefix
+    // arithmetic, which sort_keys() breaks anyway (`messages` sorts before
+    // `system`, so appending truncates the document prefix at byte 105 while the
+    // cached block is 100% intact).
+    const additionsOnly = changes.length > 0 && changes.every((change) => change.kind === "array-item-added");
+    regionTruncated = !additionsOnly && rottedAboveNewestTurn(a, offset);
+
+    // Only a rotted prefix claims paths: the spans the divergence cuts through.
+    // Claiming "every span that ends before the offset" instead let the `messages`
+    // container stand in for the whole array, so an appended turn read as a change
+    // inside the cached region.
+    const claimed = regionTruncated ? straddling : [];
+    regionA = { ...a, cachedPaths: claimed, cachedBytes: shared };
     sharedBytes = shared;
     const floor = resolved.provider.implicit_prefix_min_tokens ?? 0;
     if (floor > 0 && estimateTokens(shared) < floor) {
@@ -172,7 +224,7 @@ function comparePair(fileA: string, payloadA: Json, fileB: string, payloadB: Jso
     if (offset === null) sharedBytes = b.cachedBytes;
   }
 
-  const classification = classify(regionA, b, changes);
+  const classification = classify(regionA, b, changes, { regionTruncated });
 
   const prefixBytes = cacheMode === "implicit" ? sharedBytes : b.cachedBytes;
   const priceInput: PriceInput = {
@@ -205,6 +257,7 @@ function comparePair(fileA: string, payloadA: Json, fileB: string, payloadB: Jso
     cachedBytesA: a.cachedBytes,
     cachedBytesB: b.cachedBytes,
     sharedBytes,
+    regionBasis: cacheMode === "implicit" ? "shared_prefix" : "cached_blocks",
     breakpointPath: cacheMode === "explicit" ? a.breakpointPath : undefined,
     offset,
     contextA: offset === null ? "" : contextAround(a.canonical.text, offset),
@@ -223,8 +276,10 @@ function comparePair(fileA: string, payloadA: Json, fileB: string, payloadB: Jso
 }
 
 function explainRules(): string {
-  const { RULE_IDS, RULE_DESCRIPTIONS } = require("./classify") as typeof import("./classify");
-  const lines = ["cacheproof 0.1.0 — rule ids", ""];
+  // Interpolate the constant: a standalone version literal in this banner drifted once already (F1).
+  const lines = [`cacheproof ${VERSION} — rule ids`, ""];
+  // RULE_IDS is the single source of truth: the help line and this listing are
+  // both derived from its length, so a seventh rule cannot leave stale prose (F3).
   for (const id of RULE_IDS) {
     lines.push(`  ${id}`);
     lines.push(`      ${RULE_DESCRIPTIONS[id]}`);
@@ -241,7 +296,7 @@ Usage
   cacheproof check <run.jsonl> [options]         compare consecutive requests in a run
   cacheproof diff  <a.json> <b.json> [options]   offset + structural changes, no gate
   cacheproof price --tokens-prefix N --tokens-total M [options]
-  cacheproof rules                               list the five rule ids
+  cacheproof rules                               list all ${RULE_IDS.length} rule ids
 
 Options
   --provider anthropic|openai|deepseek   default anthropic
@@ -430,7 +485,26 @@ function main(argv: string[]): number {
   }
 }
 
+/**
+ * A reader that closes the pipe early (`| head -1`, `| true`, `grep -q`, or a CI
+ * step whose consumer dies) makes the next write raise EPIPE. That is the
+ * consumer's choice, not a failure of this run: exit 0 with nothing on stderr
+ * instead of a stack trace. Anything that is NOT EPIPE is rethrown, never
+ * swallowed — a real stream fault must still be visible (F2).
+ */
+function guardStreams(): void {
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on("error", (error: NodeJS.ErrnoException) => {
+      if (error && error.code === "EPIPE") {
+        process.exit(0);
+      }
+      throw error;
+    });
+  }
+}
+
 if (require.main === module) {
+  guardStreams();
   process.exitCode = main(process.argv.slice(2));
 }
 

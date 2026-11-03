@@ -4,7 +4,7 @@ Ratified scope: `docs/RESEARCH_OPEN_AI_TOOLING_DEMAND_20261103.md` §7 (four fun
 acceptance obligations). This file maps each obligation to the check that enforces it, and states the
 one thing each check cannot prove.
 
-Run: `npm run build && npm test` → **122 checks, 0 failures**.
+Run: `npm run build && npm test` → **134 checks, 0 failures**.
 
 | # | Obligation (dossier §7) | Enforced by | Result |
 |---|---|---|---|
@@ -16,6 +16,7 @@ Run: `npm run build && npm test` → **122 checks, 0 failures**.
 | 6 | Every offset and byte count is a **UTF-8 byte** figure, not a UTF-16 code-unit figure (audit D1) | `byte units` group: canonical bytes equal `Buffer.byteLength(text)`, strictly exceed `text.length`, and the pinned unicode fixture is pinned in bytes; `encoding-unicode__hostile` (926 B) is graded against a byte-derived offset | pass, 926 B / 232 tokens (913 code units), offset 564 |
 | 7 | `--json` is honoured by every subcommand that documents it (audit D2) | `diff --json` parsed, asserting `offset` is numeric and `changes` is a non-empty list; the same pair without `--json` still prints prose | pass, offset 524 |
 | 8 | A UTF-8 BOM is tolerated, and when the payload is still unreadable the message says so (audit D3) | `encoding-bom__clean` graded at exit 0; a BOM'd non-JSON file is exit 2 with `BOM` in the message | pass, 2/2 |
+| 9 | The span byte-accounting is guarded, not merely correct (audit D4) | `byte units`: every span boundary must decode as a complete UTF-8 sequence and the last span must end at the canonical **byte** length; `region`: implicit-prefix (OpenAI) CJK with the change after the prefix stays clean, with a model-swap control proving classification is still live | pass 4/4 (ASCII passes both ways by construction; CJK discriminates); mutation M5 (bytes→code units) fails 4 |
 
 ## What each obligation cannot prove
 

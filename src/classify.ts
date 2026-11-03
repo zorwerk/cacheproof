@@ -122,7 +122,23 @@ function volatileDiff(before: string, after: string): string | null {
   return null;
 }
 
-export function classify(a: Ingested, b: Ingested, changes: Change[]): Classification {
+export interface ClassifyBoundary {
+  /**
+   * True when the provider's cached region was measured to contain bytes the new
+   * request no longer shares — e.g. an implicit-prefix provider whose divergence
+   * lands above the newest turn. Decided from bytes, not from JSON paths, so a
+   * structural change that matches no named rule is still reported as broken
+   * instead of silently passing as clean.
+   */
+  regionTruncated?: boolean;
+}
+
+export function classify(
+  a: Ingested,
+  b: Ingested,
+  changes: Change[],
+  boundary: ClassifyBoundary = {},
+): Classification {
   const cachedChanges = changes.filter((change) => isInCachedRegion(change.path, a.cachedPaths));
   const aRecord = a.raw as { [key: string]: Json };
   const bRecord = b.raw as { [key: string]: Json };
@@ -134,15 +150,28 @@ export function classify(a: Ingested, b: Ingested, changes: Change[]): Classific
     aRecord.model !== undefined &&
     bRecord.model !== undefined &&
     String(aRecord.model) !== String(bRecord.model);
-  const rolesA = Array.isArray(aRecord.messages)
-    ? aRecord.messages.map((m) => textOf((m as { [k: string]: Json }).role))
-    : [];
-  const rolesB = Array.isArray(bRecord.messages)
-    ? bRecord.messages.map((m) => textOf((m as { [k: string]: Json }).role))
-    : [];
+  // A role change only invalidates the cache when it happens INSIDE the cached
+  // region. Appending a turn changes the role sequence of the whole payload but
+  // leaves every cached byte untouched, and a growing chat is the most common
+  // real-world shape — scoring it as a template swap made the tool cry wolf on
+  // healthy traffic (F4).
+  const cachedRolePaths = new Set(a.cachedPaths.filter((p) => /^messages\[\d+\]$/.test(p)));
+  const roleSequence = (record: { [key: string]: Json }): string[] => {
+    const messages = Array.isArray(record.messages) ? record.messages : [];
+    const roles: string[] = [];
+    messages.forEach((entry, index) => {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return;
+      if (!cachedRolePaths.has(`messages[${index}]`)) return;
+      roles.push(textOf((entry as { [key: string]: Json }).role));
+    });
+    return roles;
+  };
+  const rolesA = roleSequence(aRecord);
+  const rolesB = roleSequence(bRecord);
   const rolesChanged = rolesA.length > 0 && rolesA.join(",") !== rolesB.join(",");
 
-  const inCachedRegion = cachedChanges.length > 0 || modelChanged || rolesChanged;
+  const inCachedRegion =
+    cachedChanges.length > 0 || modelChanged || rolesChanged || boundary.regionTruncated === true;
   const evidence: string[] = [];
 
   if (!inCachedRegion) {
