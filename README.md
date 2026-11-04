@@ -14,7 +14,7 @@ Offline. Zero runtime dependencies. No API key, no network, no telemetry, no pro
 ```
 $ cacheproof check samples/008.json samples/009.json --calls 18420
 
-cacheproof 0.1.1 — Pricing: Nov 2026 — Anthropic / OpenAI / DeepSeek public rates
+cacheproof 0.1.2 — Pricing: Nov 2026 — Anthropic / OpenAI / DeepSeek public rates
 provider anthropic · model claude-3-5-sonnet · breakpoint system[0]
 
 request A  916 B canonical (~229 tokens, estimated)
