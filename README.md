@@ -44,7 +44,7 @@ That transcript is the real output of the command above, run against the two fil
 
 ## Install
 
-v0.1.0 is not on npm yet. Install from source — three commands, each offline after the clone:
+v0.1.2 is not on npm yet. Install from source — three commands, each offline after the clone:
 
 ```bash
 git clone https://github.com/zorwerk/cacheproof.git
@@ -55,12 +55,12 @@ npm link                       # puts `cacheproof` on your PATH
 node dist/cli.js check a.json b.json
 ```
 
-npm distribution is enabled at v0.1.0 publication; until then `npx cacheproof` will not resolve.
+npm distribution is enabled at v0.1.2 publication; until then `npx cacheproof` will not resolve.
 Nothing is sent anywhere. The tool reads two local files and prints.
 
 ## Install (from npm, after release)
 
-Not available yet — publishing is gated on the v0.1.0 certification. When it lands:
+Not available yet — publishing is gated on the v0.1.2 certification. When it lands:
 
 ```bash
 npx cacheproof check a.json b.json

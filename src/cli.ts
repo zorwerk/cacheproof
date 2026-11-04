@@ -27,7 +27,7 @@ import {
 import { PriceInput, RateError, computePrice, loadRates, resolveRate } from "./price";
 import { ReportContext, renderHuman, renderJson } from "./report";
 
-export const VERSION = "0.1.1";
+export const VERSION = "0.1.2";
 
 interface Parsed {
   command: string;

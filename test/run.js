@@ -491,7 +491,11 @@ if (diffParsed) {
 }
 
 const version = run(["--version"]);
-check("--version prints 0.1.1", version.stdout.trim() === "0.1.1", version.stdout.trim());
+// Expected version comes from the manifest on disk, never from a literal and never from this binary:
+// the comparison runs between two independent artifacts, so a bump that misses `src/cli.ts` fails here
+// instead of both sides agreeing on a stale number.
+const PKG_VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version;
+check(`--version prints ${PKG_VERSION}`, version.stdout.trim() === PKG_VERSION, version.stdout.trim());
 
 // F1: the `rules` banner was a hardcoded version literal in a second output surface, so it still said
 // 0.1.0 after the bump while `--version`, the header and the JSON said 0.1.1. Assert the built
@@ -499,8 +503,8 @@ check("--version prints 0.1.1", version.stdout.trim() === "0.1.1", version.stdou
 // while both being "correct".
 const rulesBanner = run(["rules"]).stdout.split("\n")[0];
 check(
-  "rules banner prints 0.1.1",
-  /^cacheproof 0\.1\.1 — rule ids$/.test(rulesBanner) &&
+  `rules banner prints ${PKG_VERSION}`,
+  rulesBanner === `cacheproof ${PKG_VERSION} — rule ids` &&
     rulesBanner === `cacheproof ${version.stdout.trim()} — rule ids`,
   `banner: ${JSON.stringify(rulesBanner)}`,
 );
