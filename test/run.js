@@ -491,7 +491,11 @@ if (diffParsed) {
 }
 
 const version = run(["--version"]);
-check("--version prints 0.1.1", version.stdout.trim() === "0.1.1", version.stdout.trim());
+// Expected version comes from the manifest on disk, never from a literal and never from this binary:
+// the comparison runs between two independent artifacts, so a bump that misses `src/cli.ts` fails here
+// instead of both sides agreeing on a stale number.
+const PKG_VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version;
+check(`--version prints ${PKG_VERSION}`, version.stdout.trim() === PKG_VERSION, version.stdout.trim());
 
 // F1: the `rules` banner was a hardcoded version literal in a second output surface, so it still said
 // 0.1.0 after the bump while `--version`, the header and the JSON said 0.1.1. Assert the built
@@ -499,8 +503,8 @@ check("--version prints 0.1.1", version.stdout.trim() === "0.1.1", version.stdou
 // while both being "correct".
 const rulesBanner = run(["rules"]).stdout.split("\n")[0];
 check(
-  "rules banner prints 0.1.1",
-  /^cacheproof 0\.1\.1 — rule ids$/.test(rulesBanner) &&
+  `rules banner prints ${PKG_VERSION}`,
+  rulesBanner === `cacheproof ${PKG_VERSION} — rule ids` &&
     rulesBanner === `cacheproof ${version.stdout.trim()} — rule ids`,
   `banner: ${JSON.stringify(rulesBanner)}`,
 );
@@ -543,6 +547,118 @@ check(
   "README.md states the real rule count at least once",
   proseSurfaces[1].text.search(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:rule ids|rules)\b/i) >= 0,
 );
+
+// --------------------------------------------- D1: fail-closed option keys (COO ruling 2026-11-04)
+// An option key that is not a documented flag used to be swallowed: `--rate` (a typo for --rates)
+// priced with the built-in table and `--jsn` printed prose at a JSON consumer, both with exit 0/1 and
+// no diagnostic. The contract now is stderr + exit 2, and the typo must not produce any output the
+// caller could mistake for a result.
+section("option keys");
+const OPTION_FIXTURE = path.join(FIXTURES, "r1-volatile-above-breakpoint__hostile");
+const OPTION_ARGS = ["check", path.join(OPTION_FIXTURE, "a.json"), path.join(OPTION_FIXTURE, "b.json")];
+
+for (const flag of ["--rate", "--jsn", "--frobnicate", "--max-miss-mutiple", "-j", "-rate"]) {
+  const result = run([...OPTION_ARGS, flag, "1"]);
+  check(`${flag}: unknown option exits 2`, result.code === 2, `got ${result.code} ${result.stderr.trim()}`);
+  check(
+    `${flag}: stderr names the unknown option`,
+    result.stderr.trim() === `cacheproof: unknown option "${flag}"`,
+    JSON.stringify(result.stderr.trim()),
+  );
+  check(`${flag}: nothing is printed on stdout`, result.stdout === "", JSON.stringify(result.stdout.slice(0, 120)));
+}
+
+// The specific financial regression: a typo'd --rates must not fall through to the built-in table.
+const rateTypo = run([...OPTION_ARGS, "--rate", path.join(ROOT, "rates", "rates.json")]);
+check(
+  "--rate cannot price with the built-in table",
+  !/cost per request|miss .* USD/.test(rateTypo.stdout),
+  JSON.stringify(rateTypo.stdout.slice(0, 160)),
+);
+// ...and the correctly spelled flag still binds the value, so the refusal above is about the key
+// spelling, not about --rates being rejected.
+const rateTyped = run([...OPTION_ARGS, "--rates", path.join(ROOT, "rates", "rates.json")]);
+check(
+  "--rates still loads an explicit table",
+  rateTyped.code === 1 && /cost per request/.test(rateTyped.stdout),
+  `exit ${rateTyped.code} ${rateTyped.stderr.trim()}`,
+);
+
+// Every documented key must still be accepted: a validation rule that rejects a valid flag is a
+// worse defect than the one it fixes, so the accepted set is asserted one key at a time.
+const acceptedFlags = [
+  { args: ["--json"], exits: [1] },
+  { args: ["--json=true"], exits: [1] },
+  { args: ["--max-miss-multiple", "5"], exits: [0] },
+  { args: ["--calls", "10"], exits: [1] },
+  { args: ["--provider", "openai"], exits: [0, 1] },
+  { args: ["--model", "claude-3-5-sonnet"], exits: [0, 1] },
+  { args: ["--rates", path.join(ROOT, "rates", "rates.json")], exits: [0, 1] },
+];
+for (const { args, exits } of acceptedFlags) {
+  const result = run([...OPTION_ARGS, ...args]);
+  check(
+    `accepted key ${args.join(" ")} is not refused`,
+    exits.includes(result.code) && result.stderr.trim() === "",
+    `exit ${result.code} ${result.stderr.trim()}`,
+  );
+}
+const helpResult = run(["--help"]);
+check("accepted key --help exits 0", helpResult.code === 0 && /Options/.test(helpResult.stdout), `exit ${helpResult.code}`);
+const versionResult = run(["--version"]);
+check("accepted key --version exits 0", versionResult.code === 0 && /^\d+\.\d+\.\d+$/.test(versionResult.stdout.trim()), versionResult.stdout.trim());
+const priceResult = run(["price", "--tokens-prefix", "640", "--tokens-total", "695"]);
+check(
+  "accepted keys --tokens-prefix/--tokens-total still price",
+  priceResult.code === 0 && /miss/.test(priceResult.stdout),
+  `exit ${priceResult.code} ${priceResult.stderr.trim()}`,
+);
+
+// The contract is prose on two surfaces as well as code: a reader who never sees stderr still has to
+// know a typo is fatal. Both surfaces are graded, so "documented fail-closed" cannot drift from
+// "actually fails closed" (the F1/F3 class that already bit this repo).
+const proseUnknown = [
+  { name: "--help", text: helpResult.stdout },
+  { name: "README.md", text: fs.readFileSync(path.join(ROOT, "README.md"), "utf8") },
+];
+for (const surface of proseUnknown) {
+  check(
+    `${surface.name} documents the fail-closed unknown-option contract`,
+    /unknown option/.test(surface.text),
+    "no mention of \"unknown option\"",
+  );
+}
+
+// ------------------------------------------------ D2: the README's own commands must run (F6 class)
+// The headline example pointed at `requests/008.json`, which does not exist in the repository — a
+// front-page command that fails with ENOENT the first time a visitor runs it. Every repo-relative
+// path the README names is now asserted to exist, and the headline command is executed.
+section("readme commands");
+const README_TEXT = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
+// Only paths the README presents as THIS repository's content are asserted. `a.json`, `run.jsonl`
+// and `captured/prev.json` are the reader's own files in the reader's own repo — asserting them
+// would fail on a correct document, which is the eager-gate failure mode.
+const REPO_ROOTS = ["samples/", "rates/", "test/", "docs/", "dist/", "src/", "scripts/"];
+const readmePaths = new Set(
+  (README_TEXT.match(/[A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:json|jsonl)\b/g) || []).filter((token) =>
+    REPO_ROOTS.some((root) => token.startsWith(root)),
+  ),
+);
+check("README names at least two repository paths", readmePaths.size >= 2, `${readmePaths.size}`);
+for (const rel of readmePaths) {
+  check(`README path exists: ${rel}`, fs.existsSync(path.join(ROOT, rel)), "missing on disk");
+}
+const headline = README_TEXT.match(/^\$ cacheproof (\S+) (\S+) (\S+) (\S+)[^\n]*$/m);
+check("README has a headline command", headline !== null, "no `$ cacheproof …` line");
+if (headline) {
+  const [, command, first, second, calls] = headline;
+  const result = run([command, first, second, calls, "18420"]);
+  check(
+    `README headline runs: ${command} ${first} ${second}`,
+    result.code === 1 && /BROKEN PREFIX/.test(result.stdout),
+    `exit ${result.code} ${result.stderr.trim()}`,
+  );
+}
 
 // F2: a consumer that closes the pipe first (`| true`, `head -n 0`, `grep -q`) used to kill the run
 // with an unhandled EPIPE stack trace. Destroy the child's stdout immediately and assert a clean 0.
