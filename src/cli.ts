@@ -45,6 +45,17 @@ const VALUE_FLAGS = new Set([
   "--tokens-total",
 ]);
 
+// Boolean flags consume nothing. Listed separately so `--json=true` stays accepted while an
+// unknown key can never be mistaken for one of these.
+const BOOLEAN_FLAGS = new Set(["--help", "--version", "--json"]);
+
+// Fail closed: an option key outside the two sets above is an unknown option, never a silently
+// ignored token. A one-character typo is how a documented flag becomes a no-op — `--rate
+// /tmp/x10.json` parses as "unknown key, use the built-in table", turning a 10x pricing input into
+// the default table with no diagnostic, and `--jsn` prints prose into a pipeline that asked for
+// JSON. Neither is detectable downstream, so the CLI refuses to run at all (stderr + exit 2).
+const KNOWN_FLAGS = new Set<string>([...VALUE_FLAGS, ...BOOLEAN_FLAGS]);
+
 function parseArgs(argv: string[]): Parsed {
   const flags = new Map<string, string | true>();
   const positionals: string[] = [];
@@ -53,6 +64,9 @@ function parseArgs(argv: string[]): Parsed {
     const token = argv[i] as string;
     if (token.startsWith("--")) {
       const [name, inline] = token.split("=", 2) as [string, string | undefined];
+      if (!KNOWN_FLAGS.has(name)) {
+        throw new IngestError(`unknown option "${name}"`);
+      }
       if (inline !== undefined) {
         flags.set(name, inline);
       } else if (VALUE_FLAGS.has(name)) {
@@ -66,6 +80,12 @@ function parseArgs(argv: string[]): Parsed {
         flags.set(name, true);
       }
       continue;
+    }
+    // The same hole in single-dash clothing: `-j` (a typo for --json) used to fall through as a
+    // positional and be discarded. A lone "-" stays a legal filename (stdin-style), anything longer
+    // that begins with a dash is an option, and an option that is not on the list is a refusal.
+    if (token.length > 1 && token.startsWith("-")) {
+      throw new IngestError(`unknown option "${token}"`);
     }
     if (!command) {
       command = token;
@@ -305,6 +325,9 @@ Options
   --max-miss-multiple <n>                default 1.0; exit 1 when the miss multiple exceeds it
   --calls <n>                            show the extrapolated bill as well
   --json                                 machine-readable output
+
+An unknown option is refused (exit 2) and named on stderr, never ignored: a misspelled key must not
+silently change the output, the price or the gate.
 
 Exit codes
   0 clean   1 broken cached prefix over the gate   2 cannot decide (bad input / incomparable)

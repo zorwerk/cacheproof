@@ -1,21 +1,23 @@
 # Instrument pins — cacheproof v0.1.1
-# captured 2026-11-03T22:10:18Z after the CEO-ordered metadata audit
-# supersedes the e2d4332 pin set (author / dependencies / description escaping)
+# captured 2026-11-04Z after the D1 fail-closed option-key fix and the D2 README path fix
+# supersedes the 2026-11-03T22:10:18Z pin set (src/cli.ts, test/run.js, package.json, README.md re-hashed; samples/ added) and the e2d4332 set before it
 # sha256 · file
 
 a3316c09b22c1a4d188276f479bf904f32a0435c4d5cff7c104d2e67f4193dc8  src/canonical.ts
 d6a4747363b9cd7d37726c9b394d4a3af56226e94ff0c9c3b6b649bbeba0f356  src/classify.ts
-8d517b7db03ec9eaadd19a89367b9fca42930f75706db9c1d7de3202fb9db598  src/cli.ts
+92190fd48635f580a174e6cda7be9d5af7e896ee2c0d8d66536b96f90cf21f90  src/cli.ts
 c17e573e11c26fbf63b5eb0193d9eb357914c23fec5ffcb79024a78cce3e652a  src/diff.ts
 21590f6e60cee0a4301b8c51f6b615b26aad0f8b8cef9198c1c4c03ea4d09e47  src/ingest.ts
 999fcfe2f0f9e8ffeb75467b4dede8a02e8905677e7ac61815755430b03eaa26  src/price.ts
 a7e81798a60018509d825c6c02000222b08c32aea1d7fd25f96c78e739ef64ae  src/report.ts
-2b562983c9278ec5e1ebe0bfb7550ce8bdcf72361f7ceff8ae80aa6875c2789c  test/run.js
+3ad96e0b0539134611261ca6df1eb8745d3517454803bbd7e4c42fd7442f2737  test/run.js
 b33ac3818ee5d4337f0ff04b620d78378dc1e3b7dde0c0cd3dfe5161fa992634  test/fixtures/derive_offsets.py
 94141b3671a1f75653a6f1823d28d6945b0941ec0dc0dbcfa0a5b6667422733b  test/fixtures/make_fixtures.py
 e4eb4664983787153136d66c641a11db849d24746c397862f3d968816f069c91  rates/rates.json
-34b87a7cdbcf894bdbe07fabf8b03b163fbbbb44d23d3befcc11645659c9f558  package.json
+f5566f6dc236f53ac4c84673ee54bd475cacbc2e6903f3bf622a00aec5a4daa6  package.json
 d2eecdcc5514301a7491902420b05bcfc91aa0effbcc0cd8f7d39616d092d850  tsconfig.json
 d34c054de799afe456425fd303faf750beb694f7b1445b4cf91b319e586597fa  docs/ACCEPTANCE.md
-2208680300fa5245e138550a991f49c6ac378a85067133c0e2ba2b744066eb90  README.md
+2b039fa071c2917b4b389d387c81cdfcd2768b0c78c06523d5003f04db82a19b  README.md
 3d73a049235433dc6fba26913659de13c3d90b9110fe56abf5f36d1d5bf5a8bd  test/e2e/run.js
+3a80fc033d9256e3ae777ec236b59f5c233dede021ea091581d1a0e561c1aa0d  samples/008.json
+ee302912f4c271c7909259881815a1a4694dce9bcf5947355a1d446c5e02add8  samples/009.json

@@ -1,0 +1,54 @@
+{
+  "model": "claude-3-5-sonnet-20241022",
+  "max_tokens": 1024,
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Read a file from the repository.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    },
+    {
+      "name": "run_tests",
+      "description": "Run the test suite and return the summary.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string"
+          }
+        },
+        "required": []
+      }
+    }
+  ],
+  "system": [
+    {
+      "type": "text",
+      "text": "SESSION clock: 2026-11-04T02:41:07Z\nHOUSE RULES (stable, never edit):\n1. Answer with the smallest correct diff.\n2. Never invent a file path; read before you write.\n3. Money paths are append-only; migrations are reversible.\n4. Cite the artifact, not your memory of it.\n5. If a check cannot decide, say so instead of guessing.\n",
+      "cache_control": {
+        "type": "ephemeral"
+      }
+    }
+  ],
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Why did invoice 8841 come out 2 cents short?"
+        }
+      ]
+    }
+  ]
+}

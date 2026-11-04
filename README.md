@@ -12,7 +12,7 @@ diverged, names the cause among six rules, and prices what the miss costs you pe
 Offline. Zero runtime dependencies. No API key, no network, no telemetry, no proxy.
 
 ```
-$ cacheproof check requests/008.json requests/009.json --calls 18420
+$ cacheproof check samples/008.json samples/009.json --calls 18420
 
 cacheproof 0.1.1 — Pricing: Nov 2026 — Anthropic / OpenAI / DeepSeek public rates
 provider anthropic · model claude-3-5-sonnet · breakpoint system[0]
@@ -20,6 +20,7 @@ provider anthropic · model claude-3-5-sonnet · breakpoint system[0]
 request A  916 B canonical (~229 tokens, estimated)
 request B  916 B canonical (~229 tokens, estimated)
 cached prefix  A 725 B · B 725 B · shared 331 B (45.7%)
+  region: explicit breakpoint — shared bytes are cached blocks held in common
 
 first divergence: byte 255 of the canonical serialisation
   A …l"},"text":"SESSION clock: 2026-11-04T02:41:07Z\nHOUSE RULES (stable, never edit):\n1. A…
@@ -28,13 +29,18 @@ first divergence: byte 255 of the canonical serialisation
 verdict: BROKEN PREFIX — rule volatile-above-breakpoint (high)
   A value that changes every call (timestamp, id, nonce, session marker) sits inside the cached prefix.
   evidence: ISO-8601 timestamp differs inside the cached prefix at system[0].text
+  paths: system[0].text
 
 cost per request as measured (prefix broken): $0.00086  (prefix ~181 tok of ~229 tok)
   with a live prefix it would be $0.00020 — 4.33x less
   at 18420 calls: $15.82 vs $3.65 (burning $12.17)
 
+note: token counts are estimated as canonical bytes / 4; cacheproof ships no tokeniser
 gate: --max-miss-multiple 1.00 → exit 1
 ```
+
+That transcript is the real output of the command above, run against the two files in
+[`samples/`](./samples) — copy it and check it yourself.
 
 ## Install
 
@@ -86,6 +92,10 @@ cacheproof rules                                     # the six rule ids
 
 Options: `--provider anthropic|openai|deepseek` · `--model <name>` · `--rates <file>` ·
 `--max-miss-multiple <n>` (default 1.0) · `--calls <n>` · `--json`.
+
+An unknown option is refused — `cacheproof: unknown option "--rate"` on stderr, exit 2 — never
+silently ignored. A one-character typo must not turn `--rates your-table.json` into the built-in table
+with no diagnostic, or `--json` into prose in a pipeline that asked for JSON.
 
 ### The JSON contract, and one number that used to lie
 
