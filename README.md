@@ -44,7 +44,20 @@ That transcript is the real output of the command above, run against the two fil
 
 ## Install
 
-v0.1.2 is not on npm yet. Install from source — three commands, each offline after the clone:
+Published on npm as `cacheproof@0.1.2`. One command, no clone:
+
+```bash
+npx cacheproof check a.json b.json     # one-shot, nothing installed globally
+```
+
+Install it if you want it on your PATH or as a project dependency:
+
+```bash
+npm install -g cacheproof              # a command on your PATH
+npm install cacheproof                 # or a dependency in a project
+```
+
+Or run it from source — no network at run time, and the only path if you want to change it:
 
 ```bash
 git clone https://github.com/zorwerk/cacheproof.git
@@ -55,16 +68,7 @@ npm link                       # puts `cacheproof` on your PATH
 node dist/cli.js check a.json b.json
 ```
 
-npm distribution is enabled at v0.1.2 publication; until then `npx cacheproof` will not resolve.
 Nothing is sent anywhere. The tool reads two local files and prints.
-
-## Install (from npm, after release)
-
-Not available yet — publishing is gated on the v0.1.2 certification. When it lands:
-
-```bash
-npx cacheproof check a.json b.json
-```
 
 ## What it checks
 
@@ -114,13 +118,20 @@ v0.1.0 shipped that key with both meanings above and no way to tell which one yo
 
 ### In CI
 
-Until the npm release, build it once in the job from a pinned commit:
+The registry is the shortest path — no clone, no build step:
+
+```yaml
+- name: prompt cache did not regress
+  run: npx --yes cacheproof check captured/prev.json captured/curr.json --max-miss-multiple 1.0
+```
+
+Pin the source instead when you want bytes that cannot move with a dist-tag:
 
 ```yaml
 - name: build cacheproof
   run: |
     git clone https://github.com/zorwerk/cacheproof.git tools/cacheproof
-    cd tools/cacheproof && git checkout v0.1.0 && npm ci && npm run build
+    cd tools/cacheproof && git checkout v0.1.2 && npm ci && npm run build
 
 - name: prompt cache did not regress
   run: |
